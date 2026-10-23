@@ -10,6 +10,7 @@
 apps/web    Vue 3 + Vite + TS + Tailwind + Leaflet（市民端 / 、市府端 /admin）
 apps/api    暫用的 Node 小 API，正式版由 Pamis 以 ASP.NET Core 實作（端點相同）
 data        Python 資料管線，輸出到 apps/web/public/data
+docs/slides 團隊規劃簡報（直接用瀏覽器開 index.html，← → 翻頁、F 全螢幕）
 ```
 
 前端只讀靜態 JSON 也能完整運作，API 掛掉 Demo 不受影響。

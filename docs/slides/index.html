@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台北桶報局｜市政 Debug 松規劃</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+  html, body { margin: 0; height: 100%; background: #0B1A17; overflow: hidden; }
+  #stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  #stage > section { position: absolute; inset: 0; box-sizing: border-box; display: none !important; overflow: hidden; }
+  #stage > section.active { display: flex !important; }
+  #stage > section[style*="display:grid"].active { display: grid !important; }
+  section * { margin: 0; box-sizing: border-box; }
+  section ul, section ol { padding-left: 1.3em; }
+  section table { border-collapse: separate; border-spacing: 0; overflow: hidden; width: 100%; }
+  section th, section td { padding: 0.35em 0.6em; text-align: left; border-bottom: 1px solid #E2DDD0; }
+  section tr:last-child td { border-bottom: none; }
+  section aside { display: none; }
+  #hud { position: fixed; right: 16px; bottom: 12px; font: 14px/1 system-ui, sans-serif; color: #9FC2B8; opacity: .7; user-select: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+<section id="cover" data-transition="fade" style="background:#14302A;color:#F6F4EE;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:space-between">
+<div style="position:absolute;left:1120px;top:128px;width:672px;height:824px;background:#1D4038;border-radius:32px"></div>
+<p style="position:absolute;left:1184px;top:200px;width:560px;font-size:32px;color:#9FC2B8">台北行人專用垃圾桶</p>
+<p style="position:absolute;left:1184px;top:270px;width:560px;font-size:120px;font-weight:900;line-height:1.1;color:#F6F4EE">近 3,000</p>
+<p style="position:absolute;left:1184px;top:450px;width:560px;font-size:44px;color:#E8833A">↓ 縮減到</p>
+<p style="position:absolute;left:1184px;top:530px;width:560px;font-size:120px;font-weight:900;line-height:1.1;color:#E8833A">約 800 組</p>
+<p style="position:absolute;left:1184px;top:760px;width:560px;font-size:24px;color:#9FC2B8;line-height:1.4">資料來源：市政 debug松官網題目說明</p>
+<p style="font-size:32px;font-weight:700;color:#E8833A;letter-spacing:2px">洋流黑客松｜市政 Debug 松・題目 #2</p>
+<div style="display:flex;flex-direction:column;gap:24px;width:900px">
+<h1 style="font-size:160px;font-weight:900;line-height:1.1;color:#F6F4EE">台北桶報局</h1>
+<p style="font-size:44px;color:#BFD8D0;line-height:1.3">找回消失的垃圾桶・團隊規劃簡報</p>
+</div>
+<p style="font-size:32px;color:#9FC2B8">同流 One Flow ・ 2026/10/23</p>
+<aside>開場：我們選的是題目 #2「找回消失的垃圾桶」。右邊的數字是官網題目說明裡的縮減幅度，上台前要跟主計處的 1,984 個統一口徑。</aside>
+</section>
+<section id="rules" data-section="規則與產品定位" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">關鍵規則</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">沒有評審，作品要能動、看得懂</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<h3 style="font-size:32px;font-weight:700;color:#14302A">Demo 要現場操作</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">只有簡報或設計稿不算。Day 1 起就能寫程式。</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<h3 style="font-size:32px;font-weight:700;color:#C4621F">16:00 提交截止</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">12:00 公布 Demo 名單，現場 10–15 組，每組約 2 分鐘。</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<h3 style="font-size:32px;font-weight:700;color:#14302A">線上票選定名次</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">10/24 16:30 到 10/31 18:00，每帳號最多投 3 件。</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<h3 style="font-size:32px;font-weight:700;color:#14302A">README 必寫</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">真實與模擬資料、開源套件與 AI 工具、100 天落地計畫。</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<h3 style="font-size:32px;font-weight:700;color:#14302A">資料不可外流</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">「市長你給我聽好了」僅限本活動，不得反推陳情人。</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<h3 style="font-size:32px;font-weight:700;color:#14302A">至少一人到場</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">10/24 09:30 報到，其他人可遠端協作。</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1200px;font-size:24px;color:#7A8783">來源：puma.taipei/hackathon</p>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">02</p>
+<aside>重點：沒有評審，名次完全靠票選，所以作品要讓一般人一看就懂，Demo 後要拉票。提交最晚 15:45，不要卡 16:00。</aside>
+</section>
+<section id="concept" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">產品定位</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">一個作品，兩個視角</h2>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:24px;background:#FFFFFF;padding:48px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-size:24px;font-weight:700;color:#C4621F">① 市民端・手機</p>
+<h3 style="font-size:44px;font-weight:900;color:#14302A">找桶與回報</h3>
+<ul style="font-size:32px;color:#4A5A55;line-height:1.5">
+<li>找最近的垃圾桶，顯示步行幾分鐘</li>
+<li>一鍵回報：滿了、不見了、這裡需要一個</li>
+</ul>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:24px;background:#14302A;padding:48px;border-radius:20px">
+<p style="font-size:24px;font-weight:700;color:#E8833A">② 市府端・儀表板</p>
+<h3 style="font-size:44px;font-weight:900;color:#F6F4EE">佈建與清運</h3>
+<ul style="font-size:32px;color:#BFD8D0;line-height:1.5">
+<li>垃圾桶沙漠地圖，列出建議新設點 Top 10</li>
+<li>模擬填滿率，依滿溢程度排清運路線</li>
+</ul>
+</div>
+</div>
+<p style="font-size:32px;font-weight:700;color:#14302A">市民回報 → 市府看見 → 調整佈建與清運</p>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">03</p>
+<aside>同時回應官方兩個方向：垃圾桶該放哪，以及沈伯洋提到的「滿了才去收」。市民的回報本身就是市府缺的資料來源。</aside>
+</section>
+<section id="score" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">缺口模型</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">人流需求減去現有垃圾桶</h2>
+</div>
+<div style="display:flex;gap:24px">
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:72px;font-weight:700;color:#C4621F">0.4</p>
+<p style="font-size:32px;color:#14302A">捷運進出量</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:72px;font-weight:700;color:#C4621F">0.3</p>
+<p style="font-size:32px;color:#14302A">陳情通報量</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:72px;font-weight:700;color:#C4621F">0.2</p>
+<p style="font-size:32px;color:#14302A">公車站牌密度</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:72px;font-weight:700;color:#C4621F">0.1</p>
+<p style="font-size:32px;color:#14302A">商圈／夜市</p>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;background:#14302A;padding:48px;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:700;color:#F6F4EE">缺口 = 需求 − 0.25 × 垃圾桶數</p>
+<p style="font-size:24px;color:#BFD8D0">台北切成 250 公尺網格，各項正規化後加權；權重是起始值，提案時可調整</p>
+</div>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">04</p>
+<aside>公式刻意保持簡單、講得清楚。權重和每個垃圾桶抵銷的需求量都寫在 build_grid.py 最上面，青可以依資料再調。</aside>
+</section>
+<section id="data" data-section="資料、分工與技術棧" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">資料分工</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">真實資料算需求，模擬資料補 IoT</h2>
+</div>
+<table style="font-family:'Noto Sans TC', Arial, sans-serif;font-size:28px;color:#1F2A27;background:#FFFFFF;border:1px solid #E2DDD0;border-radius:16px">
+<tr style="background:#14302A"><th style="width:44%;color:#F6F4EE">資料</th><th style="width:36%;color:#F6F4EE">用途</th><th style="width:20%;color:#F6F4EE">類型</th></tr>
+<tr><td>行人專用清潔箱（位置）</td><td>現有供給</td><td>真實</td></tr>
+<tr style="background:#FAF8F3"><td>捷運各站分時進出量</td><td>人流需求</td><td>真實</td></tr>
+<tr><td>公車站牌位置</td><td>人流需求</td><td>真實</td></tr>
+<tr style="background:#FAF8F3"><td>陳情系統類別資料</td><td>通報熱點</td><td>真實</td></tr>
+<tr><td>市長你給我聽好了資料集</td><td>Demo 開場的民眾抱怨</td><td>真實・去識別化</td></tr>
+<tr style="background:#FAF8F3"><td style="color:#C4621F">填滿率、市民回報</td><td style="color:#C4621F">滿溢偵測、回饋迴圈</td><td style="color:#C4621F">模擬</td></tr>
+</table>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">口徑提醒：官網寫「約 800 組」，主計處統計 2023 年 6 月底為 1,984 個。上台前統一引用哪一個。</p>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">05</p>
+<aside>「市長你給我聽好了」資料集放在 repo 的 data/private，已經 gitignore，不要丟進外部 AI 服務。</aside>
+</section>
+<section id="team" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">人力分配</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">六個人，三條線</h2>
+</div>
+<table style="font-family:'Noto Sans TC', Arial, sans-serif;font-size:28px;color:#1F2A27;background:#FFFFFF;border:1px solid #E2DDD0;border-radius:16px">
+<tr style="background:#14302A"><th style="width:16%;color:#F6F4EE">成員</th><th style="width:22%;color:#F6F4EE">線</th><th style="width:62%;color:#F6F4EE">負責</th></tr>
+<tr><td>Harry</td><td>前端</td><td>前端主架構、視覺、地圖元件</td></tr>
+<tr style="background:#FAF8F3"><td>Swimming</td><td>前端</td><td>市民端手機頁面（找桶、回報）</td></tr>
+<tr><td style="color:#C4621F">Pamis</td><td style="color:#C4621F">後端主力</td><td>ASP.NET Core API、回報 API、部署</td></tr>
+<tr style="background:#FAF8F3"><td>Vicky</td><td>後端</td><td>協助 Pamis：填滿率模擬、清運路線</td></tr>
+<tr><td>青 Ian</td><td>資料</td><td>需求分數與缺口模型、陳情資料清理</td></tr>
+<tr style="background:#FAF8F3"><td>Kyra</td><td>PM</td><td>提案稿、README、100 天落地計畫、拉票</td></tr>
+</table>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">Kyra 今晚 20:00–21:00 離線；明天約 10:30–13:00 不在現場，可遠端寫 README。</p>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">06</p>
+<aside>開會時要確認 Vicky 和 Swimming 平常用的語言與框架，報名表只寫了職能分類。</aside>
+</section>
+<section id="stack" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">技術棧</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">每個人用最熟的工具</h2>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-size:24px;font-weight:700;color:#C4621F">前端</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A">Vue 3・Vite・Tailwind・Leaflet</h3>
+<p style="font-size:24px;color:#4A5A55">靜態部署到 Vercel 或 GitHub Pages</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-size:24px;font-weight:700;color:#C4621F">後端</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A">ASP.NET Core Minimal API</h3>
+<p style="font-size:24px;color:#4A5A55">Pamis 主力，今天先把部署測通</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-size:24px;font-weight:700;color:#C4621F">資料</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A">Python 標準庫</h3>
+<p style="font-size:24px;color:#4A5A55">輸出靜態 JSON 給前端</p>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#14302A;padding:40px 48px;border-radius:20px">
+<p style="font-size:24px;font-weight:700;color:#E8833A">前後端介面</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;color:#F6F4EE;line-height:1.5">GET /api/fill-levels<br>GET /api/reports　POST /api/reports</p>
+<p style="font-size:24px;color:#BFD8D0">API 失敗時前端自動改讀靜態 JSON，Demo 不會掛</p>
+</div>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">07</p>
+<aside>儀表板每 3 秒輪詢就好，SignalR 等 Demo 跑順再考慮。免費主機會休眠，票選期間要留意。</aside>
+</section>
+<section id="today" data-section="時程、Demo 與今天要決定的事" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">時程・今天 10/23（五）</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">颱風假是多出來的開發時間</h2>
+</div>
+<div style="display:flex;flex-direction:column">
+<div style="display:flex;gap:48px;align-items:center;padding:32px 0;border-top:2px solid #14302A">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:32px;font-weight:700;color:#C4621F">13:30</p>
+<p style="flex:1;font-size:32px;color:#1F2A27">團隊會議：切角、MVP 範圍、技術、分工、今晚誰提案</p>
+</div>
+<div style="display:flex;gap:48px;align-items:center;padding:32px 0;border-top:1px solid #D6D0C2">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:32px;font-weight:700;color:#C4621F">下午</p>
+<p style="flex:1;font-size:32px;color:#1F2A27">clone repo、下載清理資料、畫出地圖與點位；Pamis 部署 hello world</p>
+</div>
+<div style="display:flex;gap:48px;align-items:center;padding:32px 0;border-top:1px solid #D6D0C2;border-bottom:1px solid #D6D0C2">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:32px;font-weight:700;color:#C4621F">19:00–22:00</p>
+<p style="flex:1;font-size:32px;color:#1F2A27">Discord 松前小聚：1–2 分鐘提案、收集回饋</p>
+</div>
+</div>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">08</p>
+<aside>今晚提案建議由 Harry 或青來講，Kyra 20:00–21:00 不在。</aside>
+</section>
+<section id="tomorrow" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">時程・明天 10/24（六）</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">15:45 前提交，不要卡 16:00</h2>
+</div>
+<div style="display:flex;flex-direction:column">
+<div style="display:flex;gap:48px;align-items:center;padding:18px 0;border-top:2px solid #14302A">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:700;color:#C4621F">09:30–10:00</p>
+<p style="flex:1;font-size:28px;color:#1F2A27">報到：臺北市中正區北平東路 30-1 號 1 樓</p>
+</div>
+<div style="display:flex;gap:48px;align-items:center;padding:18px 0;border-top:1px solid #D6D0C2">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:700;color:#C4621F">10:00–12:00</p>
+<p style="flex:1;font-size:28px;color:#1F2A27">核心功能：沙漠地圖、找桶、模擬填滿率</p>
+</div>
+<div style="display:flex;gap:48px;align-items:center;padding:18px 0;border-top:1px solid #D6D0C2">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:700;color:#C4621F">12:00</p>
+<p style="flex:1;font-size:28px;color:#1F2A27">看 Demo 名單；沒入選也照做，票選才是主戰場</p>
+</div>
+<div style="display:flex;gap:48px;align-items:center;padding:18px 0;border-top:1px solid #D6D0C2">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:700;color:#C4621F">13:00–15:00</p>
+<p style="flex:1;font-size:28px;color:#1F2A27">前後端串接、部署、補 README</p>
+</div>
+<div style="display:flex;gap:48px;align-items:center;padding:18px 0;border-top:1px solid #D6D0C2">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:700;color:#C4621F">15:00–15:45</p>
+<p style="flex:1;font-size:28px;color:#1F2A27">凍結功能、彩排 2 分鐘 Demo、提交</p>
+</div>
+<div style="display:flex;gap:48px;align-items:center;padding:18px 0;border-top:1px solid #D6D0C2;border-bottom:1px solid #D6D0C2">
+<p style="width:360px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:700;color:#C4621F">16:30–17:00</p>
+<p style="flex:1;font-size:28px;color:#1F2A27">直播 Demo，票選開放</p>
+</div>
+</div>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">09</p>
+<aside>16:00 是硬截止，提交作品名稱、網址和 GitHub 連結。</aside>
+</section>
+<section id="demo" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">2 分鐘 Demo 腳本</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">現場跑一次完整的回報迴圈</h2>
+</div>
+<div style="display:flex;gap:24px">
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:700;color:#C4621F">15 秒</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A">痛點</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">引一句民眾抱怨，加上垃圾桶大幅減少的數字</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:700;color:#C4621F">45 秒</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A">市民端</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">手機找最近的垃圾桶，現場按「滿了」回報</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#14302A;padding:40px;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:700;color:#E8833A">45 秒</p>
+<h3 style="font-size:32px;font-weight:700;color:#F6F4EE">市府端</h3>
+<p style="font-size:24px;color:#BFD8D0;line-height:1.5">回報出現在儀表板，沙漠地圖標缺口，清運路線重排</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:16px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:44px;font-weight:700;color:#C4621F">15 秒</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A">落地</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">100 天內先選一個行政區試辦，環保局加資訊局</p>
+</div>
+</div>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">10</p>
+<aside>市府端那 45 秒是最有說服力的一刻：手機剛按的回報要即時出現在大螢幕上，所以前後端要共用同一個 API。</aside>
+</section>
+<section id="agenda" data-transition="fade" style="background:#14302A;color:#F6F4EE;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:700;color:#E8833A;letter-spacing:2px">13:30 會議</p>
+<h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#F6F4EE">今天要決定的五件事</h2>
+</div>
+<ol style="font-size:32px;color:#BFD8D0;line-height:1.7">
+<li>確認題目切角：市民端加市府端兩個視角</li>
+<li>Vicky 和 Swimming 平常用的語言與框架</li>
+<li>部署主機：前端放哪裡、.NET API 放哪裡</li>
+<li>今晚 Discord 由誰提案</li>
+<li>大家 clone repo，各自開工</li>
+</ol>
+<p style="position:absolute;left:128px;bottom:64px;width:1200px;font-size:24px;color:#9FC2B8">同流 One Flow ・ One Team · One Flow · One Goal</p>
+<p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#9FC2B8;text-align:right">11</p>
+<aside>結尾回到會議要做的決定，散會時每個人都要知道自己下午做什麼。</aside>
+</section>
+</div>
+<div id="hud"></div>
+<script>
+  const slides = [...document.querySelectorAll('#stage > section')];
+  const stage = document.getElementById('stage');
+  const hud = document.getElementById('hud');
+  let i = Math.max(0, Math.min(slides.length - 1, (parseInt(location.hash.slice(1)) || 1) - 1));
+  function fit() {
+    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    stage.style.transform = `scale(${s}) translate(-50%, -50%)`;
+  }
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle('active', k === i));
+    hud.textContent = `${i + 1} / ${slides.length}  ·  ← → 翻頁  ·  F 全螢幕`;
+    history.replaceState(null, '', '#' + (i + 1));
+  }
+  addEventListener('resize', fit);
+  addEventListener('hashchange', () => {
+    const n = (parseInt(location.hash.slice(1)) || 1) - 1;
+    if (n !== i) show(n);
+  });
+  addEventListener('keydown', (e) => {
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) show(i + 1);
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) show(i - 1);
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key.toLowerCase() === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  });
+  addEventListener('click', (e) => show(e.clientX < innerWidth / 3 ? i - 1 : i + 1));
+  fit(); show(i);
+</script>
+</body>
+</html>
