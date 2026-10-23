@@ -18,3 +18,7 @@ data/private/*
 *.tsbuildinfo
 __pycache__/
 .gstack/
+
+# 本機工具產生的檔案（瀏覽器測試、AI 生圖），不進版控
+.playwright-mcp/
+output/
