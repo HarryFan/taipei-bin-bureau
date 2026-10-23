@@ -29,6 +29,7 @@ import {
   onLocalDispatchChange,
   type Dispatch,
 } from '../lib/dispatch'
+import { progressOf } from '../lib/tracking'
 import { FILL_META, fillState, REPORT_COLOR, REPORT_LABEL, type Bin, type FillLevel, type GridCell, type GridData, type Report } from '../types'
 
 type Mode = 'gap' | 'route'
@@ -228,6 +229,33 @@ function clearLog() {
   loadDispatches().then((d) => (dispatches.value = d))
 }
 
+/** 回報的處理進度（和市民端「你的回報進度」同一套邏輯） */
+function reportStatus(r: Report) {
+  if (r.kind !== 'full' || !r.binId) return undefined
+  const p = progressOf(r, dispatches.value)
+  return p.reached === 4 ? { text: `已清運 · ${p.tookMin} 分`, cls: 'bg-[#7fd6a4]/15 text-[#7fd6a4]' } : p.reached === 2 ? { text: '清運中', cls: 'bg-truck/15 text-truck' } : { text: '待派車', cls: 'bg-alert/15 text-[#ff8a8d]' }
+}
+
+/**
+ * 常滿的桶要朋友（Kyra 提案第二階段）：常常滿、附近又沒有其他桶，就建議在周邊增設。
+ * 提案參數是「7 天內 5 天滿載、150 公尺內無桶」；目前還沒有歷史填滿紀錄，
+ * 先用「現在超過門檻或 7 天內被回報滿了」代替，示範參數。
+ */
+const LONELY_M = 150
+const lonelyFullBins = computed(() => {
+  const weekAgo = Date.now() - 7 * 86_400_000
+  const reportedFull = new Set(reports.value.filter((r) => r.kind === 'full' && r.binId && Date.parse(r.createdAt) >= weekAgo).map((r) => r.binId!))
+  return visibleBins.value
+    .filter((b) => (fills.value.find((f) => f.id === b.id)?.fill ?? 0) >= threshold.value || reportedFull.has(b.id))
+    .map((b) => {
+      let nearest = Infinity
+      for (const o of bins.value) if (o.id !== b.id) nearest = Math.min(nearest, distanceMeters([b.lat, b.lng], [o.lat, o.lng]))
+      return { bin: b, nearest }
+    })
+    .filter((x) => x.nearest > LONELY_M)
+    .sort((a, b) => b.nearest - a.nearest)
+})
+
 function districtOfReport(r: Report) {
   return (r.binId ? binById.value.get(r.binId)?.district : undefined) ?? nearestBin(r.lat, r.lng)?.district ?? ''
 }
@@ -331,10 +359,16 @@ function drawOverlay() {
   }
 
   if (!district.value) return
+  // 還沒派的路線：虛線流動；已出勤的車：實線＋垃圾車
   for (const plan of routePlans.value) {
     const path = planPath(plan.stops)
     L.polyline(path, { renderer: svgRenderer, color: plan.color, weight: 7, opacity: 0.18 }).addTo(overlayLayer)
     L.polyline(path, { renderer: svgRenderer, color: plan.color, weight: 3, className: 'route-flow' }).addTo(overlayLayer)
+  }
+  for (const d of onDuty.value) {
+    const path = planPath(d.stops.map((id) => binById.value.get(id)).filter((b): b is Bin => !!b))
+    const color = TRUCK_COLORS[(d.truck - 1) % TRUCK_COLORS.length]
+    L.polyline(path, { renderer: svgRenderer, color, weight: 4, opacity: 0.9 }).addTo(overlayLayer)
   }
   L.marker(depot.value, {
     icon: L.divIcon({
@@ -346,7 +380,12 @@ function drawOverlay() {
   })
     .bindTooltip(`${district.value}清潔隊（示意位置）`)
     .addTo(overlayLayer)
-  routePlans.value.forEach((plan) => startTruck(planPath(plan.stops), plan.color))
+  // 有車出勤時只動出勤的車；還沒派車時動畫預覽路線
+  if (onDuty.value.length)
+    onDuty.value.forEach((d) =>
+      startTruck(planPath(d.stops.map((id) => binById.value.get(id)).filter((b): b is Bin => !!b)), TRUCK_COLORS[(d.truck - 1) % TRUCK_COLORS.length]),
+    )
+  else routePlans.value.forEach((plan) => startTruck(planPath(plan.stops), plan.color))
 }
 
 const planPath = (stops: Bin[]): LatLng[] => [depot.value, ...stops.map((b) => [b.lat, b.lng] as LatLng), depot.value]
@@ -476,7 +515,7 @@ watch(district, (d) => {
 
 const timeFmt = (iso: string) => new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 
-watch([mode, threshold, fills, grid, bins, district, trucks], () => {
+watch([mode, threshold, fills, grid, bins, district, trucks, dispatches], () => {
   drawBase()
   drawOverlay()
 })
@@ -632,6 +671,20 @@ onBeforeUnmount(() => {
                 </button>
               </li>
             </ol>
+
+            <h3 class="mt-6 text-sm font-bold">常滿的桶，建議增設 <span class="num font-normal text-night-mute">{{ lonelyFullBins.length }}</span></h3>
+            <p class="mb-2 text-xs leading-relaxed text-night-mute">常常滿、{{ LONELY_M }} 公尺內又沒有其他桶。示範參數，正式版用「7 天內 5 天滿載」判斷，由市府決定是否增設。</p>
+            <ul>
+              <li v-for="x in lonelyFullBins.slice(0, 6)" :key="x.bin.id">
+                <button class="group flex w-full items-center gap-3 border-t border-night-line py-2 text-left first:border-t-0" @click="flyTo(x.bin.lat, x.bin.lng)">
+                  <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-alert" />
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-sm group-hover:text-truck">{{ x.bin.road }}</span>
+                    <span class="block text-xs text-night-mute">{{ x.bin.district }}，最近的桶在 {{ Math.round(x.nearest) }} 公尺外</span>
+                  </span>
+                </button>
+              </li>
+            </ul>
           </template>
 
           <!-- 全市：各區待清運總覽，點一區進去派車 -->
@@ -768,7 +821,10 @@ onBeforeUnmount(() => {
               >
                 <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: REPORT_COLOR[r.kind] }" />
                 <span class="min-w-0 flex-1">
-                  <span class="block text-sm font-bold" :style="{ color: REPORT_COLOR[r.kind] }">{{ REPORT_LABEL[r.kind] }}</span>
+                  <span class="flex items-center gap-2 text-sm font-bold" :style="{ color: REPORT_COLOR[r.kind] }">
+                    {{ REPORT_LABEL[r.kind] }}
+                    <span v-if="reportStatus(r)" class="rounded-full px-2 py-px text-[11px] font-bold" :class="reportStatus(r)!.cls">{{ reportStatus(r)!.text }}</span>
+                  </span>
                   <span class="block truncate text-xs text-night-mute">{{ placeOf(r) }}</span>
                 </span>
                 <time class="num shrink-0 text-sm text-night-mute">{{ timeFmt(r.createdAt) }}</time>
