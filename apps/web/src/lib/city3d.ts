@@ -12,6 +12,10 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import type { Bin, GridData } from '../types'
 import type { LatLng } from './geo'
 
@@ -23,7 +27,7 @@ const BIN_SCALE = 2.2
 
 const PALETTE = {
   water: '#8cc7d6',
-  waterNight: '#244b66',
+  waterNight: '#2f6a86',
   land: '#f2e9d6',
   landAlt: '#ebe0c8',
   grass: '#c6dba6',
@@ -74,6 +78,16 @@ export class City3D {
   private tileCells: { id: string; gap: number; land: boolean; pos: THREE.Vector3 }[] = []
   private gapBars?: THREE.InstancedMesh
   private cellUnits = 5
+  /** 進場動畫：房子從地面長出來 */
+  private houses: { x: number; z: number; w: number; d: number; h: number; r: number }[] = []
+  private wallsMesh?: THREE.InstancedMesh
+  private roofsMesh?: THREE.InstancedMesh
+  private growStart = -1
+  private clouds: { obj: THREE.Group; speed: number }[] = []
+  private night = false
+  private lastT = 0
+  private composer?: EffectComposer
+  private bloom?: UnrealBloomPass
   private wallMat = new THREE.MeshStandardMaterial({ roughness: 0.85, emissive: '#ffcf7a', emissiveIntensity: 0 })
   private binMesh?: THREE.InstancedMesh
   private binLidMesh?: THREE.InstancedMesh
@@ -236,16 +250,17 @@ export class City3D {
     roofGeo.translate(0, 0.5, 0)
     const roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({ roughness: 0.8 }), houses.length)
     const q = new THREE.Quaternion()
+    // 進場動畫的延遲依「離市中心多遠」：中心先長，外圍後長
+    const maxR = Math.max(1, ...houses.map((h) => Math.hypot(h.x, h.z)))
+    this.houses = houses.map((h) => ({ x: h.x, z: h.z, w: h.w, d: h.d, h: h.h, r: Math.hypot(h.x, h.z) / maxR }))
     houses.forEach((h, i) => {
-      m.compose(new THREE.Vector3(h.x, 0, h.z), q, new THREE.Vector3(h.w, h.h, h.d))
-      walls.setMatrixAt(i, m)
       walls.setColorAt(i, new THREE.Color(h.wall))
-      // 高樓用平頂（壓扁的屋頂），矮房子用斜屋頂
-      const roofH = h.h > 4.5 ? 0.15 : 0.8
-      m.compose(new THREE.Vector3(h.x, h.h, h.z), q, new THREE.Vector3(h.w * 1.08, roofH, h.d * 1.08))
-      roofs.setMatrixAt(i, m)
       roofs.setColorAt(i, new THREE.Color(h.roof))
     })
+    this.wallsMesh = walls
+    this.roofsMesh = roofs
+    this.setHouseGrowth(this.reduceMotion ? 1 : 0)
+    this.growStart = this.reduceMotion ? -1 : performance.now()
     for (const mesh of [walls, roofs]) {
       mesh.castShadow = true
       mesh.receiveShadow = true
@@ -290,6 +305,49 @@ export class City3D {
     this.dueMarkers = new THREE.InstancedMesh(markGeo, new THREE.MeshStandardMaterial({ color: '#ff4d55', emissive: '#ff2d38', emissiveIntensity: 0.6 }), bins.length)
     this.dueMarkers.count = 0
     this.scene.add(this.dueMarkers)
+    this.addClouds()
+  }
+
+  private setHouseGrowth(t: number) {
+    if (!this.wallsMesh || !this.roofsMesh) return
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const easeOutBack = (x: number) => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2)
+    this.houses.forEach((h, i) => {
+      const local = Math.min(1, Math.max(0, (t * 1.8 - h.r * 0.8)))
+      const k = local <= 0 ? 0.001 : easeOutBack(local)
+      const hh = Math.max(0.001, h.h * k)
+      m.compose(new THREE.Vector3(h.x, 0, h.z), q, new THREE.Vector3(h.w, hh, h.d))
+      this.wallsMesh!.setMatrixAt(i, m)
+      // 高樓用平頂（壓扁的屋頂），矮房子用斜屋頂
+      const roofH = (h.h > 4.5 ? 0.15 : 0.8) * Math.min(1, k)
+      m.compose(new THREE.Vector3(h.x, hh, h.z), q, new THREE.Vector3(h.w * 1.08, Math.max(0.001, roofH), h.d * 1.08))
+      this.roofsMesh!.setMatrixAt(i, m)
+    })
+    this.wallsMesh.instanceMatrix.needsUpdate = true
+    this.roofsMesh.instanceMatrix.needsUpdate = true
+  }
+
+  /** 低多邊形的雲，慢慢飄過城市，影子會掃過地面 */
+  private addClouds() {
+    const rand = seeded(42)
+    const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, transparent: true, opacity: 0.92 })
+    const geo = new THREE.IcosahedronGeometry(1, 0)
+    for (let i = 0; i < 12; i++) {
+      const g = new THREE.Group()
+      const n = 3 + Math.floor(rand() * 3)
+      for (let j = 0; j < n; j++) {
+        const puff = new THREE.Mesh(geo, mat)
+        const s = 4 + rand() * 5
+        puff.scale.set(s * 1.3, s * 0.8, s)
+        puff.position.set(j * 5 - n * 2.5 + rand() * 2, rand() * 2, rand() * 4 - 2)
+        puff.castShadow = true
+        g.add(puff)
+      }
+      g.position.set(rand() * 600 - 300, 70 + rand() * 30, rand() * 500 - 250)
+      this.scene.add(g)
+      this.clouds.push({ obj: g, speed: 2 + rand() * 3 })
+    }
   }
 
   /** 行政區名稱標籤，點了會呼叫 onPick */
@@ -462,9 +520,19 @@ export class City3D {
   }
 
   setNight(night: boolean) {
+    this.night = night
+    // 夜間：開 bloom 讓窗戶、垃圾桶、路線發光。bloom 需要不透明背景，所以夜間改用實心天空色
+    if (night && !this.composer) {
+      this.composer = new EffectComposer(this.renderer)
+      this.composer.addPass(new RenderPass(this.scene, this.camera))
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.6, 0.72)
+      this.composer.addPass(this.bloom)
+      this.composer.addPass(new OutputPass())
+      this.resize()
+    }
     // 天空交給 CSS 漸層（容器背景），霧色取天空下緣，遠處的水面自然融進天際
-    const bg = new THREE.Color(night ? '#1d3047' : '#d7ecef')
-    this.scene.background = null
+    const bg = new THREE.Color(night ? '#0a1420' : '#d7ecef')
+    this.scene.background = night ? bg : null
     this.scene.fog = new THREE.Fog(bg, 900, 2200)
     this.hemi.intensity = night ? 0.75 : 1.1
     this.hemi.color.set(night ? '#8fa6c8' : '#ffffff')
@@ -513,6 +581,7 @@ export class City3D {
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
     this.labels.setSize(w, h)
+    this.composer?.setSize(w, h)
   }
 
   private loop = () => {
@@ -570,8 +639,23 @@ export class City3D {
       return true
     })
 
+    if (this.growStart >= 0) {
+      const g = Math.min(1, (performance.now() - this.growStart) / 2600)
+      this.setHouseGrowth(g)
+      if (g >= 1) this.growStart = -1
+    }
+    if (!this.reduceMotion) {
+      const dt = Math.min(0.1, t - this.lastT)
+      for (const c of this.clouds) {
+        c.obj.position.x += c.speed * dt
+        if (c.obj.position.x > 340) c.obj.position.x = -340
+      }
+    }
+
+    this.lastT = t
     this.pick()
-    this.renderer.render(this.scene, this.camera)
+    if (this.night && this.composer) this.composer.render()
+    else this.renderer.render(this.scene, this.camera)
     this.labels.render(this.scene, this.camera)
   }
 
