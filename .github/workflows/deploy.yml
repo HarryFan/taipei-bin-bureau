@@ -1,0 +1,49 @@
+# push 到 main 就自動建置並部署前端到 GitHub Pages
+# 第一次使用：repo Settings → Pages → Source 選「GitHub Actions」
+# 串接 .NET API：Settings → Secrets and variables → Actions → Variables 新增 VITE_API_URL
+# 注意：private repo 要付費方案（GitHub Pro / Team）才能用 Pages；免費帳號請改用 Vercel，或把 repo 改成 public
+name: Deploy web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+      # 簡報一起放上去：<網址>/slides/
+      - run: cp -r docs/slides apps/web/dist/slides
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

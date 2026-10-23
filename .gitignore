@@ -15,3 +15,4 @@ data/interim/*
 # 「市長你給我聽好了」資料集僅限本活動使用，絕對不可 commit
 data/private/*
 !data/private/.gitkeep
+*.tsbuildinfo

@@ -19,10 +19,9 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 - [ ] 在 Mac 建立 private repo 並 push
 - [ ] Windows 安裝：Node.js 22 LTS、Python 3.12（安裝時勾選 **Add python.exe to PATH**）、Git、GitHub CLI
 - [ ] Windows：`gh auth login` → `gh repo clone HarryFan/taipei-bin-bureau`
-- [ ] `npm install`
+- [ ] `npm install`（已有 `package-lock.json`，版本會一致）
 - [ ] `npm run dev` → 開 http://localhost:5173 ，確認市民端與 `/#/admin` 都能顯示
-      ⚠️ 前端套件版本（Vite 7、Tailwind 4、vue-tsc 3）還沒實際安裝驗證過，有錯先修這裡
-- [ ] `npm run build` 確認可以打包
+- [x] `npm install` / `npm run build` 已在 Linux 驗證通過（Vite 7.3、Tailwind 4.3、vue-tsc 型別檢查無錯誤）
 - [ ] `npm run slides` → 開 http://localhost:4321 ，確認簡報與動畫正常（Google Meet 分享這個分頁）
 - [ ] `npm run data:build` 確認資料管線能跑（會自動找 `python3` / `python` / `py`）
 - [ ] 邀請組員進 repo（private 需要邀請）：
@@ -48,16 +47,24 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ### Harry
 - [ ] 跑通 `npm install` / `dev` / `build`（見第 0 節）
-- [ ] **儀表板加輪詢**：`AdminView.vue` 目前只在載入時讀一次資料，要每 3 秒重新抓 `loadReports()` 與 `loadFillLevels()`，手機回報才會即時出現在大螢幕（Demo 關鍵）
-- [ ] 視覺：配色、Logo、首頁標語，跟簡報一致（深綠 `#14302A`、橘 `#E8833A`）
+- [x] **儀表板即時更新**：每 3 秒輪詢；新回報會跳通知、地圖標記閃爍、自動移到該位置，回報「滿了」時自動切到清運分頁
+- [x] API 逾時 4 秒自動退回本機資料，左上角顯示「即時連線 / 離線模式」
+- [x] 頂部列換成品牌色（深綠 `#14302A`、橘 `#E8833A`）
+- [ ] 視覺：Logo、首頁標語、整體質感（配色已套用）
 - [ ] 地圖底圖（選做）：改用國土測繪中心通用版電子地圖，比較有市政感
-- [ ] 部署前端：設定 `VITE_API_URL` 指向 .NET API；GitHub Pages 要設 `BASE_PATH=/taipei-bin-bureau/`
+- [ ] 部署前端（設定檔已備好，二選一）：
+      - **GitHub Pages**：`.github/workflows/deploy.yml`，Settings → Pages → Source 選 GitHub Actions。⚠️ private repo 需要 GitHub Pro 才能用 Pages
+      - **Vercel**：匯入 repo 即可（`vercel.json` 已設定），private repo 免費可用
+      - 兩者都會把簡報一起放在 `<網址>/slides/`
+      - 有 .NET API 後，在 Actions Variables 或 Vercel 環境變數設定 `VITE_API_URL`
 - [ ] 用手機開**部署後的 HTTPS 網址**測定位（localhost 在手機上拿不到位置）
 
 ### Swimming
 - [ ] 熟悉 `apps/web/src/views/CitizenView.vue`
-- [ ] 市民端手機版 UI：最近垃圾桶列表、步行時間、回報按鈕
-- [ ] 回報成功的回饋（toast、按鈕狀態），避免重複點擊
+- [x] 回報防重複點擊、送出中狀態、已回報打勾（已完成，可在此基礎上改）
+- [x] 手機版地圖自動把定位點推到清單面板上方
+- [ ] 市民端手機版 UI 美化：清單卡片、按鈕、地圖標記樣式
+- [ ] 定位失敗時的提示文案與引導
 - [ ] 「這裡需要一個」可以讓使用者在地圖上點選位置（選做）
 
 ---
@@ -133,6 +140,7 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 - [ ] 若要公開程式碼給票選者看，記得把 repo 改成 public（README 已用 MIT 授權）
 
 ### Demo 備案
+- Demo 前：儀表板「市民回報」旁的「清空」可以清掉測試回報（離線模式才有）
 - API 掛掉：前端自動改讀靜態 JSON，畫面不會壞，但回報不會跨裝置
 - 網路不穩：同一台筆電開兩個分頁，一個市民端、一個 `/#/admin`（localStorage 在同一瀏覽器的分頁間共用）
 
@@ -140,7 +148,5 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ## 已知問題
 
-- [ ] 前端套件尚未實際 `npm install` 驗證
 - [ ] 目前所有資料都是 `data/sample/` 的樣本（台北車站到西門一帶 12 個垃圾桶）
-- [ ] 儀表板沒有輪詢，回報不會即時出現（見第 2 節）
 - [ ] 簡報有兩份：線上 Slides 與 `docs/slides/`，內容修改不會自動同步
