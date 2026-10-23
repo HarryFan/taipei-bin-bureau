@@ -623,7 +623,7 @@ onBeforeUnmount(() => {
           {{ source === 'api' ? '即時連線' : '離線模式' }}
         </span>
         <time class="num text-lg text-night-mute">{{ now.toLocaleTimeString('zh-TW', { hour12: false }) }}</time>
-        <RouterLink :to="{ path: '/3d', query: district ? { d: district } : {} }" class="rounded-full border border-truck/60 px-3 py-1.5 text-xs font-bold text-truck hover:bg-night-2">3D</RouterLink>
+        <RouterLink :to="{ path: '/3d', query: district ? { d: district } : {} }" class="rounded-full border border-truck/60 px-3 py-1.5 text-xs font-bold text-truck hover:bg-night-2" title="切換到立體城市視角，看清運路線與缺口">3D 城市戰情室</RouterLink>
         <RouterLink to="/qr" class="rounded-full border border-night-line px-3 py-1.5 text-xs font-bold hover:bg-night-2">列印 QR</RouterLink>
         <RouterLink to="/" class="rounded-full bg-night-3 px-3 py-1.5 text-xs font-bold hover:bg-night-line">市民端</RouterLink>
       </div>
