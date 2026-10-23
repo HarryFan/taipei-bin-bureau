@@ -18,15 +18,16 @@ import type { LatLng } from './geo'
 /** 1 個場景單位 = 50 公尺 */
 const M_PER_UNIT = 50
 const M_PER_DEG_LAT = 111_320
-const TILE_H = 1
-const BIN_SCALE = 1.6
+const TILE_H = 2.4
+const BIN_SCALE = 2.2
 
 const PALETTE = {
   water: '#8cc7d6',
-  waterNight: '#16324a',
-  land: '#efe3c6',
-  landAlt: '#e3d6b5',
-  grass: '#bcd59a',
+  waterNight: '#244b66',
+  land: '#f2e9d6',
+  landAlt: '#ebe0c8',
+  grass: '#c6dba6',
+  grassAlt: '#b9d29a',
   walls: ['#fbf6ec', '#f3e7d3', '#e9dcc6', '#f6efe4', '#dfe8ea'],
   roofs: ['#d9614c', '#c4553f', '#5f7f9a', '#7a9a6a', '#e0a24a'],
   tree: ['#5f9a54', '#6fae5c', '#4f8a4a'],
@@ -70,7 +71,9 @@ export class City3D {
   private sun = new THREE.DirectionalLight('#fff1d6', 2.2)
   private water: THREE.Mesh
   private tiles?: THREE.InstancedMesh
-  private tileCells: { id: string; gap: number; land: boolean }[] = []
+  private tileCells: { id: string; gap: number; land: boolean; pos: THREE.Vector3 }[] = []
+  private gapBars?: THREE.InstancedMesh
+  private cellUnits = 5
   private wallMat = new THREE.MeshStandardMaterial({ roughness: 0.85, emissive: '#ffcf7a', emissiveIntensity: 0 })
   private binMesh?: THREE.InstancedMesh
   private binLidMesh?: THREE.InstancedMesh
@@ -97,7 +100,7 @@ export class City3D {
     this.origin = origin
     this.cosLat = Math.cos((origin.lat * Math.PI) / 180)
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true })
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
@@ -108,13 +111,14 @@ export class City3D {
     Object.assign(this.labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none' })
     el.appendChild(this.labels.domElement)
 
-    this.camera = new THREE.PerspectiveCamera(32, 1, 1, 4000)
-    this.camera.position.set(170, 230, 260)
+    this.camera = new THREE.PerspectiveCamera(32, 1, 1, 5000)
+    // 進場：從高空斜看整座城市，build 完再飛進來
+    this.camera.position.set(260, 620, 520)
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
     this.controls.maxPolarAngle = Math.PI * 0.42
     this.controls.minDistance = 25
-    this.controls.maxDistance = 700
+    this.controls.maxDistance = 1200
     this.controls.screenSpacePanning = false
 
     this.scene.add(this.hemi)
@@ -173,9 +177,20 @@ export class City3D {
         }
     }
     const all = [...cells.values()]
-    this.tileCells = all.map((c) => ({ id: c.id, gap: c.gap, land: c.land }))
+    this.tileCells = all.map((c) => ({ id: c.id, gap: c.gap, land: c.land, pos: this.project(c.lat, c.lng) }))
+    this.cellUnits = cellUnits
+    // 缺口光柱：缺口越大越高，只在缺口模式顯示
+    const barGeo = new THREE.BoxGeometry(cellUnits * 0.62, 1, cellUnits * 0.62)
+    barGeo.translate(0, 0.5, 0)
+    this.gapBars = new THREE.InstancedMesh(
+      barGeo,
+      new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.82, emissive: '#ff6a2a', emissiveIntensity: 0.25, roughness: 0.4 }),
+      all.length,
+    )
+    this.gapBars.count = 0
+    this.scene.add(this.gapBars)
 
-    const tileGeo = new THREE.BoxGeometry(cellUnits * 0.97, TILE_H, cellUnits * 0.97)
+    const tileGeo = new THREE.BoxGeometry(cellUnits * 1.001, TILE_H, cellUnits * 1.001)
     tileGeo.translate(0, -TILE_H / 2, 0)
     this.tiles = new THREE.InstancedMesh(tileGeo, new THREE.MeshStandardMaterial({ roughness: 0.95 }), all.length)
     this.tiles.receiveShadow = true
@@ -194,20 +209,21 @@ export class City3D {
     for (const c of all) {
       const p = this.project(c.lat, c.lng)
       const t = c.demand / maxDemand
-      const n = c.land ? (rand() < 0.12 ? 1 : 0) : t > 0.02 ? 1 + Math.floor(t * 5) : rand() < 0.5 ? 1 : 0
+      // 需求越高房子越多、越高；城市邊緣只有零星矮房
+      const n = c.land ? (rand() < 0.08 ? 1 : 0) : t > 0.04 ? 1 + Math.floor(t * 4.5) : rand() < 0.35 ? 1 : 0
       for (let i = 0; i < n; i++) {
-        const w = 1.1 + rand() * 1.1
+        const w = 1.1 + rand() * 0.9
         houses.push({
-          x: p.x + (rand() - 0.5) * cellUnits * 0.7,
-          z: p.z + (rand() - 0.5) * cellUnits * 0.7,
+          x: p.x + (rand() - 0.5) * cellUnits * 0.62,
+          z: p.z + (rand() - 0.5) * cellUnits * 0.62,
           w,
-          d: w * (0.7 + rand() * 0.6),
-          h: 1 + t * 9 + rand() * 1.6,
+          d: w * (0.75 + rand() * 0.5),
+          h: 1 + Math.pow(t, 0.8) * 8 + rand() * 1.2,
           wall: PALETTE.walls[Math.floor(rand() * PALETTE.walls.length)],
           roof: PALETTE.roofs[Math.floor(rand() * PALETTE.roofs.length)],
         })
       }
-      const nt = c.land ? 1 + Math.floor(rand() * 3) : t < 0.25 ? Math.floor(rand() * 3) : 0
+      const nt = c.land ? Math.floor(rand() * 3) : t < 0.15 && rand() < 0.35 ? 1 : 0
       for (let i = 0; i < nt; i++)
         trees.push({ x: p.x + (rand() - 0.5) * cellUnits * 0.85, z: p.z + (rand() - 0.5) * cellUnits * 0.85, s: 0.7 + rand() * 0.6, color: PALETTE.tree[Math.floor(rand() * 3)] })
     }
@@ -225,7 +241,7 @@ export class City3D {
       walls.setMatrixAt(i, m)
       walls.setColorAt(i, new THREE.Color(h.wall))
       // 高樓用平頂（壓扁的屋頂），矮房子用斜屋頂
-      const roofH = h.h > 5 ? 0.15 : 0.9
+      const roofH = h.h > 4.5 ? 0.15 : 0.8
       m.compose(new THREE.Vector3(h.x, h.h, h.z), q, new THREE.Vector3(h.w * 1.08, roofH, h.d * 1.08))
       roofs.setMatrixAt(i, m)
       roofs.setColorAt(i, new THREE.Color(h.roof))
@@ -269,9 +285,9 @@ export class City3D {
     this.scene.add(this.binMesh, this.binLidMesh)
 
     // 快滿的桶上方浮著倒三角警示
-    const markGeo = new THREE.ConeGeometry(0.55, 1.1, 3)
+    const markGeo = new THREE.ConeGeometry(1.5, 2.8, 3)
     markGeo.rotateX(Math.PI)
-    this.dueMarkers = new THREE.InstancedMesh(markGeo, new THREE.MeshStandardMaterial({ color: '#e5484d', emissive: '#e5484d', emissiveIntensity: 0.35 }), bins.length)
+    this.dueMarkers = new THREE.InstancedMesh(markGeo, new THREE.MeshStandardMaterial({ color: '#ff4d55', emissive: '#ff2d38', emissiveIntensity: 0.6 }), bins.length)
     this.dueMarkers.count = 0
     this.scene.add(this.dueMarkers)
   }
@@ -310,16 +326,35 @@ export class City3D {
     if (!this.tiles) return
     const maxGap = Math.max(0.0001, ...this.tileCells.map((c) => c.gap))
     const c = new THREE.Color()
+    const noise = seeded(7)
+    const ramp = (t: number) => new THREE.Color(t > 0.6 ? '#e5302f' : t > 0.3 ? '#ff7a1a' : '#ffc72c')
+    let bars = 0
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
     this.tileCells.forEach((cell, i) => {
-      if (cell.land) c.set(i % 3 ? PALETTE.grass : PALETTE.landAlt)
-      else c.set(i % 2 ? PALETTE.land : PALETTE.landAlt)
+      // 低頻的色差，避免棋盤格的雜訊感
+      const n = noise()
+      if (cell.land) c.set(n < 0.5 ? PALETTE.grass : PALETTE.grassAlt)
+      else c.set(PALETTE.land).lerp(new THREE.Color(PALETTE.landAlt), n * 0.35)
+      if (mode === 'gap') c.lerp(new THREE.Color('#c9cfc6'), 0.45)
       if (mode === 'gap' && cell.gap > 0 && (!district || district(cell.id))) {
-        const t = Math.min(1, cell.gap / maxGap)
-        c.lerp(new THREE.Color(t > 0.66 ? '#e5484d' : t > 0.33 ? '#ff8a2a' : '#ffc72c'), 0.35 + t * 0.6)
+        const t = Math.min(1, Math.sqrt(cell.gap / maxGap))
+        c.lerp(ramp(t), 0.55 + t * 0.4)
+        if (t > 0.35 && this.gapBars) {
+          m.compose(cell.pos.clone().setY(0), q, new THREE.Vector3(1, 3 + t * t * 34, 1))
+          this.gapBars.setMatrixAt(bars, m)
+          this.gapBars.setColorAt(bars, ramp(t))
+          bars++
+        }
       }
       this.tiles!.setColorAt(i, c)
     })
     this.tiles.instanceColor!.needsUpdate = true
+    if (this.gapBars) {
+      this.gapBars.count = bars
+      this.gapBars.instanceMatrix.needsUpdate = true
+      if (this.gapBars.instanceColor) this.gapBars.instanceColor.needsUpdate = true
+    }
   }
 
   /** 依填滿程度上色；focus 指定行政區時，其他區的桶縮小變淡 */
@@ -359,13 +394,13 @@ export class City3D {
       this.routeGroup.add(hq, roof)
     }
     for (const plan of plans) {
-      const pts = plan.path.map(([lat, lng]) => this.project(lat, lng, 0.35))
+      const pts = plan.path.map(([lat, lng]) => this.project(lat, lng, 0.6))
       if (pts.length < 2) continue
       const curve = new THREE.CurvePath<THREE.Vector3>()
       for (let i = 1; i < pts.length; i++) curve.add(new THREE.LineCurve3(pts[i - 1], pts[i]))
       const tube = new THREE.Mesh(
-        new THREE.TubeGeometry(curve, pts.length * 8, 0.32, 6, false),
-        new THREE.MeshStandardMaterial({ color: plan.color, emissive: plan.color, emissiveIntensity: 0.35 }),
+        new THREE.TubeGeometry(curve, pts.length * 8, 0.55, 8, false),
+        new THREE.MeshStandardMaterial({ color: plan.color, emissive: plan.color, emissiveIntensity: 0.5 }),
       )
       this.routeGroup.add(tube)
       const truck = this.makeTruck(plan.color)
@@ -392,7 +427,7 @@ export class City3D {
     }
     g.add(body, cab)
     g.traverse((o) => (o.castShadow = true))
-    g.scale.setScalar(1.3)
+    g.scale.setScalar(1.8)
     return g
   }
 
@@ -420,22 +455,23 @@ export class City3D {
     for (const [lat, lng] of points) box.expandByPoint(this.project(lat, lng))
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
-    const dist = Math.max(minDist, Math.max(size.x, size.z) * 1.35)
+    const dist = Math.max(minDist, Math.max(size.x, size.z) * 1.9)
     const dir = this.camera.position.clone().sub(this.controls.target).normalize()
     const to = center.clone().add(dir.multiplyScalar(dist))
     this.flight = { from: this.camera.position.clone(), to, fromT: this.controls.target.clone(), toT: center, t0: performance.now(), dur: this.reduceMotion ? 1 : 1100 }
   }
 
   setNight(night: boolean) {
-    const bg = new THREE.Color(night ? '#0e1a26' : '#cfe8ee')
-    this.scene.background = bg
-    this.scene.fog = new THREE.Fog(bg, 500, 1300)
-    this.hemi.intensity = night ? 0.35 : 1.1
+    // 天空交給 CSS 漸層（容器背景），霧色取天空下緣，遠處的水面自然融進天際
+    const bg = new THREE.Color(night ? '#1d3047' : '#d7ecef')
+    this.scene.background = null
+    this.scene.fog = new THREE.Fog(bg, 900, 2200)
+    this.hemi.intensity = night ? 0.75 : 1.1
     this.hemi.color.set(night ? '#8fa6c8' : '#ffffff')
-    this.sun.intensity = night ? 0.45 : 2.2
+    this.sun.intensity = night ? 0.9 : 2.2
     this.sun.color.set(night ? '#9fb6ff' : '#fff1d6')
     ;(this.water.material as THREE.MeshStandardMaterial).color.set(night ? PALETTE.waterNight : PALETTE.water)
-    this.wallMat.emissiveIntensity = night ? 0.22 : 0
+    this.wallMat.emissiveIntensity = night ? 0.4 : 0
     if (this.binMesh) (this.binMesh.material as THREE.MeshStandardMaterial).emissiveIntensity = night ? 0.25 : 0
   }
 
@@ -461,10 +497,19 @@ export class City3D {
     this.onHover?.(id >= 0 ? { bin: this.bins[id], ...this.hoverAt } : undefined)
   }
 
+  /** 左側有面板蓋住時，把畫面中心往右移，城市才會置中在可見區域 */
+  private insetLeft = 0
+  setInsetLeft(px: number) {
+    this.insetLeft = px
+    this.resize()
+  }
+
   private resize() {
     const { clientWidth: w, clientHeight: h } = this.el
     if (!w || !h) return
     this.camera.aspect = w / h
+    if (this.insetLeft && w > 900) this.camera.setViewOffset(w, h, -this.insetLeft / 2, 0, w, h)
+    else this.camera.clearViewOffset()
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
     this.labels.setSize(w, h)
@@ -489,7 +534,7 @@ export class City3D {
       const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t * 1.5)
       this.dueIdx.forEach((bi, i) => {
         const b = this.bins[bi]
-        const p = this.project(b.lat, b.lng, 3.4 + (this.reduceMotion ? 0 : Math.sin(t * 3 + bi) * 0.35))
+        const p = this.project(b.lat, b.lng, 5.5 + (this.reduceMotion ? 0 : Math.sin(t * 3 + bi) * 0.5))
         m.compose(p, q, new THREE.Vector3(1, 1, 1))
         this.dueMarkers!.setMatrixAt(i, m)
       })

@@ -126,7 +126,7 @@ function focus() {
   const c = city.value
   if (!c) return
   const pts = visibleBins.value.map((b) => [b.lat, b.lng] as LatLng)
-  c.flyToPoints(pts, district.value ? 70 : 320)
+  c.flyToPoints(pts, district.value ? 130 : 340)
 }
 
 watch([mode, fills, dispatches, trucks], syncScene)
@@ -169,6 +169,7 @@ const timeFmt = (iso: string) => new Date(iso).toLocaleTimeString('zh-TW', { hou
 onMounted(async () => {
   const c = new City3D(stage.value!, ORIGIN)
   c.onHover = (h) => (hover.value = h)
+  c.setInsetLeft(340)
   city.value = c
   const [b, g, meta] = await Promise.all([loadBins(), loadGrid(), loadMeta()])
   bins.value = b
@@ -191,7 +192,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative h-full overflow-hidden bg-[#cfe8ee] text-ink" :class="night ? 'city3d-night' : ''">
+  <div class="city3d-sky relative h-full overflow-hidden text-ink" :class="night ? 'city3d-night' : ''">
     <div ref="stage" class="absolute inset-0" />
     <div v-if="loading" class="absolute inset-0 grid place-items-center text-sm text-mute">城市生成中…</div>
 
@@ -337,6 +338,24 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
+.city3d-sky {
+  background:
+    radial-gradient(120% 80% at 50% 110%, rgb(255 236 200 / 0.55), transparent 60%),
+    linear-gradient(180deg, #bfe1ea 0%, #d7ecef 45%, #eef4ef 100%);
+  transition: background 0.6s;
+}
+.city3d-sky.city3d-night {
+  background:
+    radial-gradient(120% 80% at 50% 110%, rgb(255 190 110 / 0.18), transparent 60%),
+    linear-gradient(180deg, #08111c 0%, #13253a 55%, #1d3047 100%);
+}
+.city3d-sky::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(140% 100% at 50% 45%, transparent 55%, rgb(16 37 28 / 0.18) 100%);
+}
 .city3d-label {
   display: inline-flex;
   align-items: center;
