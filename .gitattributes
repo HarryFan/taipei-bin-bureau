@@ -1,0 +1,5 @@
+# Windows / macOS 協作：統一 LF 換行
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.woff2 binary

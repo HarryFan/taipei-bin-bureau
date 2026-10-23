@@ -10,7 +10,7 @@
     "build": "npm run build -w apps/web",
     "preview": "npm run preview -w apps/web",
     "api": "npm run start -w apps/api",
-    "data:build": "python3 data/scripts/build_bins.py && python3 data/scripts/build_grid.py && python3 data/scripts/simulate_fill.py",
-    "slides": "python3 -m http.server 4321 --bind 127.0.0.1 -d docs/slides"
+    "data:build": "node scripts/run-data.mjs",
+    "slides": "node scripts/serve-slides.mjs"
   }
 }
