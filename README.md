@@ -8,13 +8,32 @@
 
 **資料來源、數字單位與資料驅動的開發需求見 [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)，動工前請先讀第 0 節。**
 
-## 結構
+## 技術棧
+
+| 層 | 技術 | 說明 |
+| --- | --- | --- |
+| 前端框架 | Vue 3.5、TypeScript 5.9、Vite 7.3 | 單頁應用，`vue-tsc` 型別檢查 |
+| 路由 | Vue Router 4（hash 模式） | `/` 市民端、`/admin` 市府戰情、`/bin/:id` 掃碼回報、`/qr` 列印貼紙；hash 模式部署到任何靜態主機都不用設定轉址 |
+| 樣式 | Tailwind CSS 4.3 | 設計語彙「台灣道路指示牌 × 清潔隊垃圾車」，色彩定義在 `apps/web/src/style.css` 的 `@theme` |
+| 地圖 | Leaflet 1.9（canvas 繪製） | 底圖依序嘗試 CARTO → OpenStreetMap → 國土測繪中心，連不上或逾時 5 秒就自動換下一個 |
+| 動畫 | GSAP 3.15 | 市府戰情的數字滾動；垃圾車沿路線行駛用 `requestAnimationFrame` |
+| QR Code | qrcode 1.5 | 產生貼紙；簽章與驗證目前在前端示意，正式版改由後端處理 |
+| 字型 | Chiron GoRound TC、Barlow Semi Condensed | 以 @fontsource 打包在專案內，現場沒網路也能顯示 |
+| 後端（暫用） | Node.js 22，零相依 HTTP 伺服器 | `apps/api/server.mjs`，資料存在記憶體；API 連不上時前端自動改用瀏覽器儲存 |
+| 後端（正式） | ASP.NET Core Minimal API | 由 Pamis 實作，端點與暫用版相同，見 TODO.md |
+| 資料管線 | Python 3（只用標準庫） | 產生模擬資料、轉換開放資料、計算缺口網格，輸出靜態 JSON 到 `apps/web/public/data` |
+| 簡報 | 手寫 HTML + GSAP 3.12 | `docs/slides/`，`npm run slides` 用 Node 提供本機網址 |
+| 部署 | Vercel（`vercel.json`）或 GitHub Pages（`.github/workflows/deploy.yml`） | 兩者都會把簡報一起放在 `<網址>/slides/` |
+| 專案管理 | npm workspaces（monorepo） | 根目錄一個 `npm install` 裝好全部 |
+
+### 結構
 
 ```
-apps/web    Vue 3 + Vite + TS + Tailwind + Leaflet（市民端 / 、市府端 /admin）
-apps/api    暫用的 Node 小 API，正式版由 Pamis 以 ASP.NET Core 實作（端點相同）
-data        Python 資料管線，輸出到 apps/web/public/data
-docs/slides 團隊規劃簡報（直接用瀏覽器開 index.html，← → 翻頁、F 全螢幕）
+apps/web     前端：市民端、市府戰情、掃碼回報、QR 列印頁
+apps/api     暫用的 Node API（正式版由 Pamis 以 ASP.NET Core 實作，端點相同）
+data         Python 資料管線：mock/ 模擬資料、scripts/ 轉換與模型
+docs         資料來源指南、提交清單、團隊簡報
+scripts      跨平台的 Node 輔助腳本（簡報伺服器、資料管線執行器）
 ```
 
 前端只讀靜態 JSON 也能完整運作，API 掛掉 Demo 不受影響。
@@ -123,10 +142,8 @@ npm run data:mock    # 重新產生模擬資料再建置
 
 ## 使用的開源套件與 AI 工具
 
-- Vue、Vue Router、Vite、Tailwind CSS、Leaflet、GSAP
-- 字型：Chiron GoRound TC、Barlow Semi Condensed（@fontsource，打包在專案內）
-- 底圖：CARTO Voyager / Dark Matter（© OpenStreetMap contributors © CARTO）
-- 簡報動畫：GSAP 3.12.5（docs/slides/gsap.min.js）
+- 套件版本見上方「技術棧」
+- 底圖：CARTO Voyager / Dark Matter、OpenStreetMap、內政部國土測繪中心通用版電子地圖（依可用性自動切換）
 - AI 工具：Claude（專案規劃與程式骨架）
 - TODO：其他成員使用的工具
 

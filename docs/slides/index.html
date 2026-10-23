@@ -254,30 +254,35 @@
 <p style="font-size:24px;font-weight:700;color:#C4621F;letter-spacing:2px">技術棧</p>
 <h2 style="font-size:72px;font-weight:900;line-height:1.1;color:#14302A">每個人用最熟的工具</h2>
 </div>
-<div style="display:flex;gap:32px">
-<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<div style="display:flex;gap:24px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:36px;border:1px solid #E2DDD0;border-radius:20px">
 <p style="font-size:24px;font-weight:700;color:#C4621F">前端</p>
-<h3 style="font-size:32px;font-weight:700;color:#14302A">Vue 3・Vite・Tailwind・Leaflet</h3>
-<p style="font-size:24px;color:#4A5A55">靜態部署到 Vercel 或 GitHub Pages</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A;line-height:1.25">Vue 3・TypeScript・Vite</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">Tailwind 4、GSAP 動畫、QR Code，部署到 Vercel</p>
 </div>
-<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:36px;border:1px solid #E2DDD0;border-radius:20px">
+<p style="font-size:24px;font-weight:700;color:#C4621F">地圖</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A;line-height:1.25">Leaflet</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">底圖依序試 CARTO、OpenStreetMap、國土測繪中心，連不上自動換</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:36px;border:1px solid #E2DDD0;border-radius:20px">
 <p style="font-size:24px;font-weight:700;color:#C4621F">後端</p>
-<h3 style="font-size:32px;font-weight:700;color:#14302A">ASP.NET Core Minimal API</h3>
-<p style="font-size:24px;color:#4A5A55">Pamis 主力，今天先把部署測通</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A;line-height:1.25">ASP.NET Core</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">Pamis 主力；先用零相依的 Node API，端點相同</p>
 </div>
-<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:40px;border:1px solid #E2DDD0;border-radius:20px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FFFFFF;padding:36px;border:1px solid #E2DDD0;border-radius:20px">
 <p style="font-size:24px;font-weight:700;color:#C4621F">資料</p>
-<h3 style="font-size:32px;font-weight:700;color:#14302A">Python 標準庫</h3>
-<p style="font-size:24px;color:#4A5A55">輸出靜態 JSON 給前端</p>
+<h3 style="font-size:32px;font-weight:700;color:#14302A;line-height:1.25">Python 標準庫</h3>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">模擬資料與缺口模型，輸出靜態 JSON</p>
 </div>
 </div>
 <div style="display:flex;flex-direction:column;gap:12px;background:#14302A;padding:40px 48px;border-radius:20px">
 <p style="font-size:24px;font-weight:700;color:#E8833A">前後端介面</p>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;color:#F6F4EE;line-height:1.5">GET /api/fill-levels<br>GET /api/reports　POST /api/reports</p>
-<p style="font-size:24px;color:#BFD8D0">API 失敗時前端自動改讀靜態 JSON，Demo 不會掛</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;color:#F6F4EE;line-height:1.5">GET /api/fill-levels　GET /api/reports　POST /api/reports</p>
+<p style="font-size:24px;color:#BFD8D0">API 連不上時改用瀏覽器儲存與靜態 JSON，Demo 不會掛</p>
 </div>
 <p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">09</p>
-<aside>儀表板每 3 秒輪詢就好，SignalR 等 Demo 跑順再考慮。免費主機會休眠，票選期間要留意。</aside>
+<aside>前端與資料都已完成並可展示；後端 .NET 版由 Pamis 實作，沒完成也不影響 Demo，同一台筆電開兩個分頁就能示範回報即時出現。字型打包在專案內，現場沒網路也能顯示。完整版本號見 README 的技術棧。</aside>
 </section>
 <section id="today" data-section="時程、Demo 與今天要決定的事" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
 <div style="display:flex;flex-direction:column;gap:12px">
