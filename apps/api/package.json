@@ -1,0 +1,8 @@
+{
+  "name": "@tbb/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --watch server.mjs"
+  }
+}

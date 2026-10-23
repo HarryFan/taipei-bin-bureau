@@ -1,0 +1,13 @@
+{
+  "name": "taipei-bin-bureau",
+  "private": true,
+  "description": "台北桶報局：找回消失的垃圾桶（市政 debug松 #2）",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "preview": "npm run preview -w apps/web",
+    "api": "npm run start -w apps/api",
+    "data:build": "python3 data/scripts/build_bins.py && python3 data/scripts/build_grid.py && python3 data/scripts/simulate_fill.py"
+  }
+}

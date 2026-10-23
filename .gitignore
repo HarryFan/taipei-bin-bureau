@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# 原始下載資料不進版控，請依 data/README.md 自行下載
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+
+# 「市長你給我聽好了」資料集僅限本活動使用，絕對不可 commit
+data/private/*
+!data/private/.gitkeep
