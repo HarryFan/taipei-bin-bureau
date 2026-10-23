@@ -17,3 +17,4 @@ data/private/*
 !data/private/.gitkeep
 *.tsbuildinfo
 __pycache__/
+.gstack/
