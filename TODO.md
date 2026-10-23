@@ -101,7 +101,7 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 | POST | `/api/reports` | 收 `{ id, kind, lat, lng, binId?, createdAt }`，回 201 |
 | GET | `/api/dispatches` | 派車紀錄陣列，新的在前 |
 | POST | `/api/dispatches` | 收 `{ id, district, truck, stops[], km, estMin, departedAt }`，回 201 |
-| PATCH | `/api/dispatches/:id` | 收 `{ returnedAt }`（返隊時間），回 200 |
+| PATCH | `/api/dispatches/:id` | 收 `{ returnedAt?, photo? }`（返隊時間、清運完成照片 data URL），回 200 |
 
 - `kind` 只能是 `full`（滿了）、`missing`（不見了）、`need`（這裡需要一個）
 - 被回報 `full` 的 `binId`，在 `/api/fill-levels` 要變成 `fill: 1`

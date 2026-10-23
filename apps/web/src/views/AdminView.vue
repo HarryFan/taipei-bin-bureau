@@ -20,7 +20,9 @@ import {
 } from '../lib/data'
 import { distanceMeters, loopMeters, splitRoutes, type LatLng } from '../lib/geo'
 import {
+  attachPhoto,
   clearLocalDispatches,
+  compressPhoto,
   createDispatch,
   estimateMinutes,
   loadDispatches,
@@ -211,6 +213,19 @@ async function dispatchTrucks() {
     await createDispatch({ district: district.value, truck: plan.truck, stops: plan.stops.map((b) => b.id), km: Math.round(plan.km * 10) / 10, estMin: plan.estMin })
   }
   dispatches.value = await loadDispatches()
+}
+
+async function addPhoto(id: string, e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    await attachPhoto(id, await compressPhoto(file))
+    dispatches.value = await loadDispatches()
+  } catch (err) {
+    console.warn('照片上傳失敗', err)
+  }
 }
 
 async function returnTruck(id: string) {
@@ -786,6 +801,11 @@ onBeforeUnmount(() => {
                   </span>
                 </span>
                 <button v-if="!d.returnedAt" class="shrink-0 rounded-full bg-[#7fd6a4] px-2.5 py-1 text-xs font-bold text-ink" @click="returnTruck(d.id)">返隊</button>
+                <img v-else-if="d.photo" :src="d.photo" alt="清運完成照片" class="h-9 w-12 shrink-0 rounded-[6px] object-cover" />
+                <label v-else class="shrink-0 cursor-pointer rounded-full border border-night-line px-2.5 py-1 text-xs text-night-mute hover:text-night-text" title="清完拍照回傳，市民的回報頁也看得到">
+                  拍照回傳
+                  <input type="file" accept="image/*" capture="environment" class="sr-only" @change="addPhoto(d.id, $event)" />
+                </label>
               </li>
             </ul>
             <p class="mt-4 text-xs leading-relaxed text-night-mute">路線先用最近鄰居法排，再用 2-opt 解開交叉；多台車依方向分區。清潔隊位置與作業時間為示意參數。填滿率是模擬的感測資料，市民回報「滿了」會直接計為 100%。</p>

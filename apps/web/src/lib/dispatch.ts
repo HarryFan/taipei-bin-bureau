@@ -6,7 +6,7 @@
  * 後端端點（Pamis 的 .NET 版照這個實作即可）：
  *   GET   /api/dispatches            → Dispatch[]（新到舊）
  *   POST  /api/dispatches            body: Dispatch → 201
- *   PATCH /api/dispatches/:id        body: { returnedAt } → 200
+ *   PATCH /api/dispatches/:id        body: { returnedAt?, photo? } → 200
  */
 const API = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '') || undefined
 const KEY = 'tbb-dispatches'
@@ -24,6 +24,8 @@ export interface Dispatch {
   estMin: number
   departedAt: string
   returnedAt?: string
+  /** 清運完成照片（壓縮後的 JPEG data URL），市民端「清運完成」會顯示 */
+  photo?: string
 }
 
 /** 預估用時：市區垃圾車平均時速約 18 公里，每桶清運約 3 分鐘（示意參數，之後用實際紀錄校正） */
@@ -99,6 +101,41 @@ export async function markReturned(id: string): Promise<void> {
     }
   }
   writeLocal(readLocal().map((d) => (d.id === id ? { ...d, returnedAt } : d)))
+}
+
+/** 清運完成拍照回傳：補一張照片到這一趟（Kyra 提案「拍照打卡」） */
+export async function attachPhoto(id: string, photo: string): Promise<void> {
+  if (API) {
+    try {
+      await api(`/api/dispatches/${id}`, { method: 'PATCH', body: JSON.stringify({ photo }) })
+      return
+    } catch {
+      /* 退回本機 */
+    }
+  }
+  writeLocal(readLocal().map((d) => (d.id === id ? { ...d, photo } : d)))
+}
+
+/** 手機照片動輒好幾 MB，先縮到長邊 640px 的 JPEG（約 50KB）再存 */
+export function compressPhoto(file: File, maxSide = 640): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const k = Math.min(1, maxSide / Math.max(img.width, img.height))
+      const c = document.createElement('canvas')
+      c.width = Math.round(img.width * k)
+      c.height = Math.round(img.height * k)
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      URL.revokeObjectURL(url)
+      resolve(c.toDataURL('image/jpeg', 0.72))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('讀不到這張照片'))
+    }
+    img.src = url
+  })
 }
 
 export function clearLocalDispatches() {

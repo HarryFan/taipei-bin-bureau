@@ -49,7 +49,10 @@ createServer(async (req, res) => {
     if (m && req.method === 'PATCH') {
       const d = dispatches.find((x) => x.id === decodeURIComponent(m[1]))
       if (!d) return send(res, 404, { error: '找不到這筆派車' })
-      Object.assign(d, { returnedAt: (await readBody(req)).returnedAt ?? new Date().toISOString() })
+      const body = await readBody(req)
+      if (body.returnedAt) d.returnedAt = body.returnedAt
+      if (typeof body.photo === 'string' && body.photo.startsWith('data:image/') && body.photo.length < 400_000) d.photo = body.photo
+      if (!body.returnedAt && !body.photo) d.returnedAt = new Date().toISOString()
       return send(res, 200, d)
     }
 
