@@ -271,6 +271,22 @@ const lonelyFullBins = computed(() => {
     .sort((a, b) => b.nearest - a.nearest)
 })
 
+/**
+ * 案件：桶報局受理時「去重」（Kyra 流程圖第 2 步）。
+ * 同一桶、同一種狀態、同一趟處理中的回報合併成一個案件，顯示有幾位市民回報，
+ * 清運完成後再有人回報就是新案件。
+ */
+const cases = computed(() => {
+  const map = new Map<string, { key: string; latest: Report; count: number }>()
+  for (const r of visibleReports.value) {
+    const key = r.binId ? `${r.binId}:${r.kind}:${r.kind === 'full' ? (progressOf(r, dispatches.value).dispatch?.id ?? 'open') : 'all'}` : r.id
+    const c = map.get(key)
+    if (c) c.count++
+    else map.set(key, { key, latest: r, count: 1 })
+  }
+  return [...map.values()]
+})
+
 function districtOfReport(r: Report) {
   return (r.binId ? binById.value.get(r.binId)?.district : undefined) ?? nearestBin(r.lat, r.lng)?.district ?? ''
 }
@@ -832,8 +848,8 @@ onBeforeUnmount(() => {
               {{ confirmReset ? '再按一次清空' : '清空' }}
             </button>
           </div>
-          <TransitionGroup v-if="reports.length" tag="ol" name="feed" class="mt-3 max-h-80 overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
-            <li v-for="r in reports.slice(0, 30)" :key="r.id">
+          <TransitionGroup v-if="cases.length" tag="ol" name="feed" class="mt-3 max-h-80 overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
+            <li v-for="{ key, latest: r, count } in cases.slice(0, 30)" :key="key">
               <button
                 class="flex w-full gap-3 rounded-[8px] px-2 py-2 text-left transition"
                 :class="freshIds.has(r.id) ? 'bg-night-3' : 'hover:bg-night-2'"
@@ -844,6 +860,7 @@ onBeforeUnmount(() => {
                   <span class="flex items-center gap-2 text-sm font-bold" :style="{ color: REPORT_COLOR[r.kind] }">
                     {{ REPORT_LABEL[r.kind] }}
                     <span v-if="reportStatus(r)" class="rounded-full px-2 py-px text-[11px] font-bold" :class="reportStatus(r)!.cls">{{ reportStatus(r)!.text }}</span>
+                    <span v-if="count > 1" class="num ml-auto rounded-full bg-night-3 px-2 py-px text-[11px] font-bold text-night-text" :title="'同一桶的回報已合併成一個案件'">{{ count }} 人回報</span>
                   </span>
                   <span class="block truncate text-xs text-night-mute">{{ placeOf(r) }}</span>
                 </span>
