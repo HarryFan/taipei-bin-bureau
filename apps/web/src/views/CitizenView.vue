@@ -3,13 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import L from 'leaflet'
 import { createMap, TAIPEI } from '../lib/map'
 import { useRoute } from 'vue-router'
-import { isMock, loadBins, loadFillLevels, loadGrid, loadMeta, submitReport } from '../lib/data'
+import { isMock, loadBins, loadFillLevels, loadGrid, loadMeta, loadReports, submitReport } from '../lib/data'
 import { shortCode, verifyBin } from '../lib/qr'
 import { claim, POINTS, STALE_DAYS, totals } from '../lib/rewards'
 import { bearingDeg, compassWord, distanceMeters, walkingMinutes, type LatLng } from '../lib/geo'
 import { loadDispatches, onLocalDispatchChange, type Dispatch } from '../lib/dispatch'
 import { badgeOf, myReports, nextBadge, progressOf, rememberReport, STEPS } from '../lib/tracking'
-import { FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type ReportKind } from '../types'
+import { FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type Report, type ReportKind } from '../types'
 
 type LocateState = 'locating' | 'ok' | 'denied'
 
@@ -36,6 +36,22 @@ const points = ref(totals())
 const gapCells = ref<GridCell[]>([])
 const mine = ref(myReports())
 const dispatches = ref<Dispatch[]>([])
+const allReports = ref<Report[]>([])
+/**
+ * 這桶 30 分鐘內已經有人回報「滿了」、還沒清運完成：告訴市民「處理中」（Kyra 提案）。
+ * 再回報一樣會送出，戰情室會合併到同一個案件。
+ */
+const OPEN_CASE_MIN = 30
+const openCase = computed(() => {
+  const bin = target.value?.bin
+  if (!bin) return undefined
+  const since = now.value - OPEN_CASE_MIN * 60_000
+  const mineIds = new Set(mine.value.map((r) => r.id))
+  const list = allReports.value.filter((r) => r.binId === bin.id && r.kind === 'full' && Date.parse(r.createdAt) >= since && progressOf(r, dispatches.value).reached < 4)
+  if (!list.length || list.every((r) => mineIds.has(r.id))) return undefined
+  const enroute = list.some((r) => progressOf(r, dispatches.value).reached === 2)
+  return { count: list.length, status: enroute ? '清運車已出發' : '已受理，等待派車' }
+})
 const now = ref(Date.now())
 const badge = computed(() => badgeOf(mine.value.length))
 const upcoming = computed(() => nextBadge(mine.value.length))
@@ -50,6 +66,7 @@ let trackTimer: ReturnType<typeof setInterval> | undefined
 let stopDispatchListen: (() => void) | undefined
 async function refreshTracking() {
   now.value = Date.now()
+  loadReports().then((r) => (allReports.value = r)).catch(() => {})
   // 清運完成後仍繼續更新一陣子，才收得到清潔隊補傳的照片
   if (!tracked.value || (tracked.value.progress.reached >= 4 && tracked.value.progress.dispatch?.photo)) return
   dispatches.value = await loadDispatches()
@@ -202,6 +219,22 @@ function locate() {
   )
 }
 
+/** 回報完成可以分享到社群（Kyra 提案：我為台北做了一件小事） */
+async function share() {
+  const url = `${location.origin}${location.pathname}`
+  const text = '我為台北做了一件小事：回報了一個滿出來的垃圾桶。台北市是大家的，乾淨也是。'
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: '台北桶報局', text, url })
+      return
+    }
+    await navigator.clipboard.writeText(`${text} ${url}`)
+    showToast('已複製分享文字，貼到社群就可以')
+  } catch {
+    /* 使用者取消分享 */
+  }
+}
+
 function showToast(text: string) {
   toast.value = text
   clearTimeout(toastTimer)
@@ -276,6 +309,7 @@ onMounted(async () => {
   applyScan()
   locate()
   dispatches.value = await loadDispatches()
+  allReports.value = await loadReports().catch(() => [])
   trackTimer = setInterval(refreshTracking, 3000)
   stopDispatchListen = onLocalDispatchChange(refreshTracking)
 })
@@ -433,6 +467,15 @@ onBeforeUnmount(() => {
           <span class="shrink-0 text-sm font-bold">改去這桶</span>
         </button>
 
+        <!-- 這桶已經有人回報：處理中 -->
+        <div v-if="openCase" class="mt-3 flex items-center gap-3 rounded-[12px] bg-sign-soft px-3 py-2.5 text-sign" role="status">
+          <span class="relative flex h-3 w-3 shrink-0"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-sign opacity-40" /><span class="relative inline-flex h-3 w-3 rounded-full bg-sign" /></span>
+          <p class="text-sm leading-snug">
+            這桶 {{ OPEN_CASE_MIN }} 分鐘內已有 <span class="num font-bold">{{ openCase.count }}</span> 人回報，<span class="font-bold">處理中</span>（{{ openCase.status }}）。<br />
+            <span class="text-xs">你再回報也會合併到同一個案件。</span>
+          </p>
+        </div>
+
         <!-- 回報 -->
         <div v-if="target" class="mt-3 grid grid-cols-2 gap-2">
           <button
@@ -523,6 +566,10 @@ onBeforeUnmount(() => {
               <p class="mt-0.5 text-xs text-mute">戰情室已經收到，等清潔隊排入下一趟清運。</p>
             </template>
           </div>
+          <button class="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border-2 border-sign py-2 text-sm font-bold text-sign transition active:scale-[0.99]" @click="share">
+            <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M4 11v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5" /></svg>
+            分享：我為台北做了一件小事
+          </button>
         </div>
 
         <!-- 巡桶任務：帶大家去資料最缺的地方 -->
