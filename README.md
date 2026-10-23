@@ -4,7 +4,7 @@
 
 市民一鍵找到最近的垃圾桶、回報滿了或不見了；市府從同一份回報看見「垃圾桶沙漠」，並依填滿率安排清運。
 
-工作清單與分工進度見 [TODO.md](TODO.md)；提交清單與 YouTube 影片腳本見 [docs/SUBMISSION.md](docs/SUBMISSION.md)。會議紀錄放在 [docs/meetings/](docs/meetings/)。
+工作清單與分工進度見 [TODO.md](TODO.md)；提交清單與 YouTube 影片腳本見 [docs/SUBMISSION.md](docs/SUBMISSION.md)。會議紀錄放在 [docs/meetings/](docs/meetings/)。市府處理流程與實作對照見 [docs/FLOW.md](docs/FLOW.md)。
 
 **資料來源、數字單位與資料驅動的開發需求見 [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)，動工前請先讀第 0 節。**
 
