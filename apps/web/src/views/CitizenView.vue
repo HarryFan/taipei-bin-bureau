@@ -7,6 +7,8 @@ import { isMock, loadBins, loadFillLevels, loadGrid, loadMeta, submitReport } fr
 import { shortCode, verifyBin } from '../lib/qr'
 import { claim, POINTS, STALE_DAYS, totals } from '../lib/rewards'
 import { bearingDeg, compassWord, distanceMeters, walkingMinutes, type LatLng } from '../lib/geo'
+import { loadDispatches, onLocalDispatchChange, type Dispatch } from '../lib/dispatch'
+import { badgeOf, myReports, nextBadge, progressOf, rememberReport, STEPS } from '../lib/tracking'
 import { FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type ReportKind } from '../types'
 
 type LocateState = 'locating' | 'ok' | 'denied'
@@ -32,6 +34,25 @@ const scanValid = ref<boolean>()
 const checkedDays = ref(new Map<string, number>())
 const points = ref(totals())
 const gapCells = ref<GridCell[]>([])
+const mine = ref(myReports())
+const dispatches = ref<Dispatch[]>([])
+const now = ref(Date.now())
+const badge = computed(() => badgeOf(mine.value.length))
+const upcoming = computed(() => nextBadge(mine.value.length))
+const binById = computed(() => new Map(bins.value.map((b) => [b.id, b])))
+/** 追蹤最近一筆「滿了」的回報（24 小時內） */
+const tracked = computed(() => {
+  const r = mine.value.find((x) => x.kind === 'full' && x.binId && now.value - Date.parse(x.createdAt) < 86_400_000)
+  if (!r) return undefined
+  return { report: r, bin: binById.value.get(r.binId!), progress: progressOf(r, dispatches.value, now.value) }
+})
+let trackTimer: ReturnType<typeof setInterval> | undefined
+let stopDispatchListen: (() => void) | undefined
+async function refreshTracking() {
+  now.value = Date.now()
+  if (!tracked.value || tracked.value.progress.reached >= 4) return
+  dispatches.value = await loadDispatches()
+}
 
 let binLayer: L.LayerGroup | undefined
 let focusLayer: L.LayerGroup | undefined
@@ -194,7 +215,12 @@ async function report(kind: ReportKind, bin?: Bin) {
   sending.value = key
   try {
     const at: LatLng = bin ? [bin.lat, bin.lng] : here.value
-    await submitReport({ kind, lat: at[0], lng: at[1], binId: bin?.id })
+    const sent = await submitReport({ kind, lat: at[0], lng: at[1], binId: bin?.id })
+    const before = badgeOf(mine.value.length)
+    rememberReport({ id: sent.id, kind, binId: bin?.id, createdAt: sent.createdAt })
+    mine.value = myReports()
+    const after = badgeOf(mine.value.length)
+    if (after && after !== before) setTimeout(() => showToast(`獲得徽章「${after.name}」`), 4400)
     reported.value = new Set([...reported.value, key])
     navigator.vibrate?.(30)
     if (kind === 'full' && bin) fills.value = new Map(fills.value).set(bin.id, 1)
@@ -210,8 +236,8 @@ async function report(kind: ReportKind, bin?: Bin) {
     })
     points.value = totals()
     if (bin) checkedDays.value = new Map(checkedDays.value).set(bin.id, 0)
-    const sent = kind === 'need' ? '已回報這裡需要垃圾桶，市府會看到' : `已回報「${REPORT_LABEL[kind]}」`
-    showToast(reward.points ? `${sent}，${reward.message}` : sent)
+    const msg = kind === 'need' ? '已回報這裡需要垃圾桶，市府會看到' : `已回報「${REPORT_LABEL[kind]}」`
+    showToast(reward.points ? `${msg}，${reward.message}` : msg)
     if (!reward.points) setTimeout(() => showToast(reward.message), 2200)
   } catch {
     showToast('沒有送出去，請確認網路後再按一次')
@@ -248,6 +274,9 @@ onMounted(async () => {
   bins.value = b
   applyScan()
   locate()
+  dispatches.value = await loadDispatches()
+  trackTimer = setInterval(refreshTracking, 3000)
+  stopDispatchListen = onLocalDispatchChange(refreshTracking)
 })
 
 /** 掃碼開啟：核對簽章；通過就把目標設成這一桶，並當作人就在桶旁邊 */
@@ -269,6 +298,8 @@ function applyScan() {
 watch(() => route.fullPath, applyScan)
 
 onBeforeUnmount(() => {
+  clearInterval(trackTimer)
+  stopDispatchListen?.()
   clearTimeout(toastTimer)
   map.value?.remove()
 })
@@ -293,6 +324,11 @@ onBeforeUnmount(() => {
         綠點
         <span class="num text-base font-bold">{{ points.confirmed + points.pending }}</span>
         <span class="text-[10px] text-mute">示意</span>
+        <span
+          v-if="badge"
+          class="ml-1 rounded-full bg-truck px-2 py-0.5 text-[11px] font-bold text-ink"
+          :title="`已回報 ${mine.length} 次。${badge.note}${upcoming ? `；再 ${upcoming.min - mine.length} 次升級「${upcoming.name}」` : ''}`"
+        >{{ badge.name }}</span>
       </div>
       <div class="pointer-events-auto flex items-center gap-2">
         <RouterLink to="/admin" class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
@@ -436,6 +472,56 @@ onBeforeUnmount(() => {
           </template>
           <template v-else>掃描垃圾桶上的 QR Code 回報，可以領綠點</template>
         </p>
+
+        <!-- 回報追蹤：像追外送一樣 -->
+        <div v-if="tracked" class="mt-4 rounded-[16px] border-2 border-hair p-4" aria-live="polite">
+          <div class="flex items-baseline justify-between gap-2">
+            <h2 class="text-sm font-bold">你的回報進度</h2>
+            <span class="num text-xs text-mute">{{ new Date(tracked.report.createdAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }) }} 回報</span>
+          </div>
+          <p class="mt-0.5 truncate text-xs text-mute">{{ tracked.bin?.road ?? '垃圾桶' }}</p>
+          <ol class="mt-3 grid grid-cols-5 gap-1">
+            <li v-for="(st, i) in STEPS" :key="st.key" class="flex flex-col items-center text-center">
+              <span class="relative flex w-full items-center">
+                <span class="h-[3px] flex-1 rounded-full" :class="i === 0 ? 'opacity-0' : i <= tracked.progress.reached + 1 ? 'bg-sign' : 'bg-hair'" />
+                <span
+                  class="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold transition"
+                  :class="
+                    i <= tracked.progress.reached
+                      ? 'bg-sign text-white'
+                      : i === tracked.progress.reached + 1
+                        ? 'bg-truck text-ink ring-4 ring-truck/30'
+                        : 'bg-paper text-mute'
+                  "
+                >
+                  <svg v-if="i <= tracked.progress.reached" viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5" /></svg>
+                  <template v-else>{{ i + 1 }}</template>
+                </span>
+                <span class="h-[3px] flex-1 rounded-full" :class="i === 4 ? 'opacity-0' : i <= tracked.progress.reached ? 'bg-sign' : 'bg-hair'" />
+              </span>
+              <span class="mt-1.5 text-[11px] leading-tight" :class="i <= tracked.progress.reached + 1 ? 'font-bold text-ink' : 'text-mute'">{{ st.title }}</span>
+            </li>
+          </ol>
+          <div class="mt-3 rounded-[10px] bg-paper px-3 py-2.5 text-sm">
+            <template v-if="tracked.progress.reached === 4">
+              <p class="font-bold text-sign">{{ STEPS[4].voice }}</p>
+              <p class="mt-0.5 text-xs text-mute">
+                市府花了 <span class="num text-base font-bold text-ink">{{ tracked.progress.tookMin }}</span> 分鐘完成清運，謝謝你讓這一桶被看見。
+              </p>
+            </template>
+            <template v-else-if="tracked.progress.reached === 2">
+              <p class="font-bold">{{ STEPS[3].voice }}</p>
+              <p class="mt-0.5 text-xs text-mute">
+                {{ tracked.progress.dispatch?.district }}第 {{ tracked.progress.dispatch?.truck }} 車已出發，預估
+                <span class="num text-sm font-bold text-ink">{{ tracked.progress.etaMin }}</span> 分鐘內到這一桶
+              </p>
+            </template>
+            <template v-else>
+              <p class="font-bold">{{ STEPS[1].voice }}</p>
+              <p class="mt-0.5 text-xs text-mute">戰情室已經收到，等清潔隊排入下一趟清運。</p>
+            </template>
+          </div>
+        </div>
 
         <!-- 巡桶任務：帶大家去資料最缺的地方 -->
         <div v-show="!collapsed && (quests.staleBins.length || quests.desert)" class="mt-5">
