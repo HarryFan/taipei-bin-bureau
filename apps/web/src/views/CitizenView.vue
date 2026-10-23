@@ -50,7 +50,8 @@ let trackTimer: ReturnType<typeof setInterval> | undefined
 let stopDispatchListen: (() => void) | undefined
 async function refreshTracking() {
   now.value = Date.now()
-  if (!tracked.value || tracked.value.progress.reached >= 4) return
+  // 清運完成後仍繼續更新一陣子，才收得到清潔隊補傳的照片
+  if (!tracked.value || (tracked.value.progress.reached >= 4 && tracked.value.progress.dispatch?.photo)) return
   dispatches.value = await loadDispatches()
 }
 
@@ -508,6 +509,7 @@ onBeforeUnmount(() => {
               <p class="mt-0.5 text-xs text-mute">
                 市府花了 <span class="num text-base font-bold text-ink">{{ tracked.progress.tookMin }}</span> 分鐘完成清運，謝謝你讓這一桶被看見。
               </p>
+              <img v-if="tracked.progress.dispatch?.photo" :src="tracked.progress.dispatch.photo" alt="清潔隊回傳的清運完成照片" class="mt-2 w-full rounded-[8px] object-cover" />
             </template>
             <template v-else-if="tracked.progress.reached === 2">
               <p class="font-bold">{{ STEPS[3].voice }}</p>
