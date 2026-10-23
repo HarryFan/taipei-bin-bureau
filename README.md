@@ -22,7 +22,7 @@ npm install
 npm run dev          # http://localhost:5173
 npm run data:build   # 重新產生 bins / grid / fill_levels
 npm run api          # 選配，啟動後在 apps/web/.env 設定 VITE_API_URL
-npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F 全螢幕）
+npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F 全螢幕、R 重播動畫）
 ```
 
 ## 分工
@@ -54,6 +54,7 @@ npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F �
 ## 使用的開源套件與 AI 工具
 
 - Vue、Vue Router、Vite、Tailwind CSS、Leaflet
+- 簡報動畫：GSAP 3.12.5（docs/slides/gsap.min.js）
 - AI 工具：Claude（專案規劃與程式骨架）
 - TODO：其他成員使用的工具
 
