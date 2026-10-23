@@ -19,16 +19,79 @@ docs/slides 團隊規劃簡報（直接用瀏覽器開 index.html，← → 翻�
 
 前端只讀靜態 JSON 也能完整運作，API 掛掉 Demo 不受影響。
 
-## 快速開始
+## 如何啟動專案
+
+### 1. 準備環境（第一次才需要）
+
+| 工具 | 版本 | 用途 |
+| --- | --- | --- |
+| [Node.js](https://nodejs.org/) | 22 LTS 以上 | 前端、簡報、暫用 API |
+| [Python](https://www.python.org/) | 3.9 以上 | 資料管線（只有要重建資料時才需要） |
+| Git、[GitHub CLI](https://cli.github.com/) | — | 取得程式碼 |
+
+> Windows 安裝 Python 時請勾選 **Add python.exe to PATH**。
+
+### 2. 取得程式碼並安裝
 
 ```bash
+gh repo clone HarryFan/taipei-bin-bureau
+cd taipei-bin-bureau
 npm install
-npm run dev          # http://localhost:5173
-npm run data:build   # 重新產生 bins / grid / fill_levels（有 data/raw 用真實資料，否則用 data/mock）
-npm run data:mock    # 重新產生模擬資料再建置
-npm run api          # 選配，啟動後在 apps/web/.env 設定 VITE_API_URL
-npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F 全螢幕、R 重播動畫）
 ```
+
+### 3. 啟動前端
+
+```bash
+npm run dev
+```
+
+打開 http://localhost:5173
+
+| 網址 | 畫面 | 適合 |
+| --- | --- | --- |
+| http://localhost:5173/ | 市民端：找最近的垃圾桶、回報 | 手機（電腦也能看，清單在左側） |
+| http://localhost:5173/#/admin | 市府戰情：缺口熱區、清運調度、即時回報 | 電腦、投影 |
+
+不用啟動後端也能完整操作：資料讀 `apps/web/public/data/` 的靜態檔，回報存在瀏覽器裡。
+
+### 4. 用手機看
+
+```bash
+npm run dev -- --host
+```
+
+終端機會顯示一個區網網址（例如 `http://192.168.1.23:5173`），手機連同一個 Wi-Fi 打開即可。
+
+> 手機透過區網的 http 連線**拿不到定位**，會改用台北車站示範。要測定位，請用部署後的 HTTPS 網址。
+
+### 5. Demo：手機回報 → 大螢幕即時出現
+
+- **沒有後端時**：同一個瀏覽器開兩個分頁，一個開市民端、一個開 `/#/admin`。在市民端按「這桶滿了」，儀表板 3 秒內會跳出來。
+- **有後端時**：先啟動 API，再讓前端連過去，手機和大螢幕就能跨裝置同步。
+
+```bash
+npm run api                                           # 暫用的 Node API，http://localhost:8787
+cp apps/web/.env.example apps/web/.env                # 內容是 VITE_API_URL=http://localhost:8787
+npm run dev                                           # 重新啟動前端
+```
+
+儀表板左上角會顯示「即時連線」或「離線模式」。Demo 前可以按儀表板上的「清空」清掉測試回報（離線模式才有）。
+
+### 6. 其他指令
+
+```bash
+npm run build        # 打包到 apps/web/dist，部署用
+npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F 全螢幕、R 重播動畫）
+npm run data:build   # 重建地圖資料（有 data/raw 用真實資料，否則用 data/mock）
+npm run data:mock    # 重新產生模擬資料再建置
+```
+
+### 常見問題
+
+- **地圖只有點，沒有底圖**：底圖從 CARTO 線上載入，網路不通時會顯示「地圖底圖載入失敗，請檢查網路」。垃圾桶位置與功能不受影響。
+- **`npm run data:build` 說找不到 Python**：安裝 Python 3.9 以上並加入 PATH，Windows 可以用 `py --version` 確認。
+- **畫面上寫「模擬資料」**：還沒放真實資料，見 [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) 第 4 節。
+- **port 被占用**：`npm run dev -- --port 5180` 換一個。
 
 ## 分工
 
@@ -54,7 +117,7 @@ npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F �
 | 「市長你給我聽好了」資料集 | 真實（去識別化，僅限本活動，未收錄於本 repo） |
 | 垃圾桶填滿率 | **模擬資料**（`data/scripts/simulate_fill.py`） |
 | 市民回報 | **模擬／Demo 現場產生** |
-| `data/mock/*` | **模擬資料**：全台北市約 800 個垃圾桶、捷運站人流、公車站、陳情、商圈（`data/scripts/generate_mock.py` 產生，捷運站與商圈為約略座標，人流為假設量級） |
+| `data/mock/*` | **模擬資料**：全台北市 661 個垃圾桶點位、捷運站人流、公車站、陳情、商圈（`data/scripts/generate_mock.py` 產生，捷運站與商圈為約略座標，人流為假設量級） |
 
 地圖圖資：© OpenStreetMap contributors © CARTO
 

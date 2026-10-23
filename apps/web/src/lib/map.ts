@@ -21,10 +21,51 @@ export function createMap(el: HTMLElement, opts: { center?: LatLng; zoom?: numbe
     minZoom: 11,
   }).setView(opts.center ?? TAIPEI, opts.zoom ?? 15)
   L.control.zoom({ position: 'bottomright' }).addTo(map)
-  L.tileLayer(TILES[opts.theme ?? 'light'], {
+  const tiles = L.tileLayer(TILES[opts.theme ?? 'light'], {
     maxZoom: 19,
     subdomains: 'abcd',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(map)
+  watchTiles(map, tiles, opts.theme ?? 'light')
   return map
+}
+
+/**
+ * 底圖連不上時（網路不穩、預覽環境擋外部圖片）在地圖上明講，
+ * 免得看的人以為程式壞了。只要有任一張圖磚載入成功就收起來。
+ */
+function watchTiles(map: L.Map, tiles: L.TileLayer, theme: 'light' | 'dark') {
+  let loaded = 0
+  let failed = 0
+  const note = L.DomUtil.create('div')
+  note.setAttribute('role', 'status')
+  note.textContent = '地圖底圖載入失敗，請檢查網路'
+  note.title = '垃圾桶位置與功能不受影響'
+  Object.assign(note.style, {
+    position: 'absolute',
+    left: '50%',
+    top: '72px', // 放上方：手機版下半部會被清單面板蓋住
+    transform: 'translateX(-50%)',
+    zIndex: '900',
+    whiteSpace: 'nowrap',
+    padding: '8px 14px',
+    borderRadius: '9999px',
+    fontSize: '13px',
+    lineHeight: '1.4',
+    textAlign: 'center',
+    pointerEvents: 'none',
+    display: 'none',
+    background: theme === 'dark' ? 'rgb(17 37 28 / 0.92)' : 'rgb(255 255 255 / 0.95)',
+    color: theme === 'dark' ? '#e6efe9' : '#10251c',
+    boxShadow: '0 4px 16px rgb(16 37 28 / 0.18)',
+  })
+  map.getContainer().appendChild(note)
+  tiles.on('tileload', () => {
+    loaded++
+    note.style.display = 'none'
+  })
+  tiles.on('tileerror', () => {
+    failed++
+    if (!loaded && failed >= 4) note.style.display = 'block'
+  })
 }
