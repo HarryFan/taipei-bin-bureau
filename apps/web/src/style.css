@@ -31,6 +31,36 @@
   --color-night-line: #24402f;
   --color-night-text: #e6efe9;
   --color-night-mute: #8fa89a;
+
+  /* 淺底可讀的語意文字色（在 .gov-bar 深綠底上會換回亮色） */
+  --color-truck-ink: #8a6500;
+  --color-ok: #0b5d3b;
+  --color-alert-ink: #c62828;
+  --color-warn-ink: #b45309;
+}
+
+/*
+ * 市府戰情（2D）改淺色：只在 .theme-gov 範圍內把 night-* 換成淺色值，
+ * 全域 night-* 不動，其他頁面不受影響。
+ */
+.theme-gov {
+  --color-night: #f6f8f7;
+  --color-night-2: var(--color-paper);
+  --color-night-3: var(--color-sign-soft);
+  --color-night-line: var(--color-hair);
+  --color-night-text: var(--color-ink);
+  --color-night-mute: var(--color-mute);
+}
+
+/* 政府端識別頂欄：深綠底，裡面的 night-* 與語意色換回深底版本 */
+.gov-bar {
+  --color-night-2: rgb(255 255 255 / 0.1);
+  --color-night-3: rgb(255 255 255 / 0.16);
+  --color-night-line: rgb(255 255 255 / 0.28);
+  --color-night-text: #ffffff;
+  --color-night-mute: #b9d3c4;
+  --color-truck-ink: var(--color-truck);
+  --color-ok: #7fd6a4;
 }
 
 html,
@@ -63,36 +93,14 @@ body {
   font-family: var(--font-sans);
   background: #dfe6e2;
 }
-.theme-dark .leaflet-container {
-  background: #0e1d17;
-}
 .leaflet-control-attribution {
   font-size: 10px;
-}
-.theme-dark .leaflet-control-attribution {
-  background: rgb(11 26 20 / 0.7) !important;
-  color: #8fa89a;
-}
-.theme-dark .leaflet-control-attribution a {
-  color: #b8cfc2;
-}
-.theme-dark .leaflet-bar a {
-  background: #11251c;
-  color: #e6efe9;
-  border-color: #24402f;
 }
 .leaflet-tooltip {
   font-family: var(--font-sans);
   border-radius: 8px;
   border: none;
   box-shadow: 0 4px 16px rgb(16 37 28 / 0.18);
-}
-.theme-dark .leaflet-tooltip {
-  background: #11251c;
-  color: #e6efe9;
-}
-.theme-dark .leaflet-tooltip-top::before {
-  border-top-color: #11251c;
 }
 
 /* 清運路線的流動虛線 */
@@ -132,7 +140,7 @@ body {
   }
 }
 
-/* 備用底圖沒有深色版，在戰情室調暗以配合深色介面 */
+/* 備用底圖沒有深色版，深色主題時調暗（目前戰情室已改淺色，保留給 theme: 'dark'） */
 .tiles-dim {
   filter: brightness(0.55) saturate(0.6) contrast(1.1) hue-rotate(10deg);
 }

@@ -222,6 +222,8 @@ onBeforeUnmount(() => {
   <div class="city3d-sky relative h-full overflow-hidden text-ink" :class="night ? 'city3d-night' : ''">
     <!-- isolate：CSS2D 標籤會自帶很大的 z-index，關在自己的堆疊層，才不會蓋到面板 -->
     <div ref="stage" class="absolute inset-0 isolate" />
+    <!-- 政府端識別：頂端黃色細條（市民端沒有） -->
+    <div class="pointer-events-none absolute inset-x-0 top-0 z-10 h-1 bg-truck" />
     <div v-if="loading" class="absolute inset-0 grid place-items-center text-sm text-mute">城市生成中…</div>
     <Transition name="intro3d">
       <div v-if="intro && !loading" class="pointer-events-none absolute inset-x-0 top-[30%] flex flex-col items-center gap-3 text-center">
@@ -237,9 +239,9 @@ onBeforeUnmount(() => {
       <div class="pointer-events-auto rounded-[12px] bg-sign p-[4px] shadow-lg">
         <div class="rounded-[9px] border-2 border-white/90 px-3 py-1.5 text-base font-bold tracking-[0.08em] text-white">台北桶報局</div>
       </div>
-      <div class="rounded-[12px] bg-white/90 px-3.5 py-1.5 leading-tight shadow-lg backdrop-blur">
+      <div class="rounded-[12px] bg-sign-deep px-3.5 py-1.5 leading-tight text-white shadow-lg">
         <div class="text-lg font-bold">3D 城市戰情室</div>
-        <div class="text-xs text-mute">市府端・內部使用</div>
+        <div class="mt-0.5 inline-block rounded-full bg-truck px-2 py-px text-xs font-bold text-ink">市府端・內部使用</div>
       </div>
       <span v-if="mock" class="rounded-full bg-white/70 px-2.5 py-0.5 text-xs text-mute">部分模擬資料</span>
     </div>

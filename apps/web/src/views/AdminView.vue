@@ -40,7 +40,9 @@ const POLL_MS = 3000
 const DISTRICTS = ['中正區', '大同區', '中山區', '松山區', '大安區', '萬華區', '信義區', '士林區', '北投區', '內湖區', '南港區', '文山區']
 /** 同一區最多同時派幾台車（示意） */
 const MAX_TRUCKS = 3
-const TRUCK_COLORS = ['#ffc72c', '#5ac8fa', '#ff8ad8']
+const TRUCK_COLORS = ['#c79400', '#0a6fd6', '#c2185b']
+// 回報類型的文字色：types 的 REPORT_COLOR 偏亮，淺底上換成深一階
+const REPORT_TEXT: Record<Report['kind'], string> = { full: '#c62828', missing: '#56695f', need: '#8a6500', ok: '#0b5d3b' }
 
 const routeQ = useRoute()
 const router = useRouter()
@@ -248,7 +250,7 @@ function clearLog() {
 function reportStatus(r: Report) {
   if (r.kind !== 'full' || !r.binId) return undefined
   const p = progressOf(r, dispatches.value)
-  return p.reached === 4 ? { text: `已清運 · ${p.tookMin} 分`, cls: 'bg-[#7fd6a4]/15 text-[#7fd6a4]' } : p.reached === 2 ? { text: '清運中', cls: 'bg-truck/15 text-truck' } : { text: '待派車', cls: 'bg-alert/15 text-[#ff8a8d]' }
+  return p.reached === 4 ? { text: `已清運 · ${p.tookMin} 分`, cls: 'bg-ok/12 text-ok' } : p.reached === 2 ? { text: '清運中', cls: 'bg-truck/20 text-truck-ink' } : { text: '待派車', cls: 'bg-alert/12 text-alert-ink' }
 }
 
 /**
@@ -318,7 +320,7 @@ watch(
 // ---------- 地圖 ----------
 function rampColor(t: number) {
   // 黃 → 橘 → 紅：缺口越大越紅
-  return t > 0.66 ? '#e5484d' : t > 0.33 ? '#ff8a2a' : '#ffc72c'
+  return t > 0.66 ? '#e5484d' : t > 0.33 ? '#ff8a2a' : '#e0a800'
 }
 
 function placeOf(r: Report) {
@@ -338,8 +340,8 @@ function drawBase() {
     for (const c of cells) {
       const t = Math.min(1, c.gap / maxGap.value)
       if (t < 0.2) continue
-      L.circle([c.lat, c.lng], { radius: radius * (1.6 - t * 0.4), stroke: false, fillColor: rampColor(t), fillOpacity: 0.06 + t * 0.12, interactive: false }).addTo(baseLayer)
-      L.circle([c.lat, c.lng], { radius: radius * 0.55, stroke: false, fillColor: rampColor(t), fillOpacity: 0.12 + t * 0.4 })
+      L.circle([c.lat, c.lng], { radius: radius * (1.6 - t * 0.4), stroke: false, fillColor: rampColor(t), fillOpacity: 0.1 + t * 0.12, interactive: false }).addTo(baseLayer)
+      L.circle([c.lat, c.lng], { radius: radius * 0.55, stroke: false, fillColor: rampColor(t), fillOpacity: 0.18 + t * 0.4 })
         .bindTooltip(`缺口 ${c.gap.toFixed(2)}，這一格有 ${c.supply} 個垃圾桶`)
         .addTo(baseLayer)
     }
@@ -348,7 +350,7 @@ function drawBase() {
   for (const b of bins.value) {
     // 其他區的垃圾桶淡淡畫出來當背景，保留和鄰區的相對位置
     if (district.value && b.district !== district.value) {
-      L.circleMarker([b.lat, b.lng], { radius: 1.5, stroke: false, fillColor: '#6f9a84', fillOpacity: 0.25, interactive: false }).addTo(baseLayer)
+      L.circleMarker([b.lat, b.lng], { radius: 1.5, stroke: false, fillColor: '#0b5d3b', fillOpacity: 0.35, interactive: false }).addTo(baseLayer)
       continue
     }
     const fill = fillById.value.get(b.id) ?? 0
@@ -357,9 +359,9 @@ function drawBase() {
     L.circleMarker([b.lat, b.lng], {
       radius: routeMode ? (due ? 5 : 3) : 2.5,
       stroke: routeMode && due,
-      color: '#0b1a14',
+      color: '#fff',
       weight: 1,
-      fillColor: routeMode ? (due ? '#e5484d' : fill >= 0.5 ? '#c79400' : '#3f7a5c') : '#6f9a84',
+      fillColor: routeMode ? (due ? '#e5484d' : fill >= 0.5 ? '#c79400' : '#3f7a5c') : '#0b5d3b',
       fillOpacity: routeMode ? 0.95 : 0.7,
     })
       .bindTooltip(`${b.road}<br>${FILL_META[fillState(fill)].label}，${Math.round(fill * 100)}%<br>${checkedById.value.get(b.id) === 0 ? '今天有人確認' : `${checkedById.value.get(b.id) ?? '—'} 天前有人確認`}`)
@@ -380,7 +382,7 @@ function drawOverlay() {
           className: '',
           iconSize: [30, 30],
           iconAnchor: [15, 15],
-          html: `<div style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:#ffc72c;color:#10251c;font:700 15px var(--font-num);box-shadow:0 0 0 3px rgb(11 26 20 / .9),0 0 22px rgb(255 199 44 / .55)">${i + 1}</div>`,
+          html: `<div style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:#ffc72c;color:#10251c;font:700 15px var(--font-num);box-shadow:0 0 0 3px #fff,0 2px 10px rgb(16 37 28 / .35)">${i + 1}</div>`,
         }),
       })
         .bindTooltip(`候選新設點 #${i + 1}：${s.place}`)
@@ -422,7 +424,7 @@ function drawOverlay() {
 const planPath = (stops: Bin[]): LatLng[] => [depot.value, ...stops.map((b) => [b.lat, b.lng] as LatLng), depot.value]
 
 const truckHtml = (color: string) => `
-  <div style="width:40px;height:40px;display:grid;place-items:center;border-radius:9999px;background:${color};box-shadow:0 0 0 3px #0b1a14,0 6px 18px rgb(0 0 0 / .45)">
+  <div style="width:40px;height:40px;display:grid;place-items:center;border-radius:9999px;background:${color};box-shadow:0 0 0 3px #fff,0 4px 14px rgb(16 37 28 / .35)">
     <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
       <path d="M3 9h15v12H3zM18 13h6l4 4v4H18z" fill="#10251c"/>
       <circle cx="9" cy="23" r="3" fill="#10251c" stroke="${color}" stroke-width="1.5"/>
@@ -477,7 +479,7 @@ function drawReports() {
         interactive: false,
       }).addTo(reportLayer)
     }
-    L.circleMarker([r.lat, r.lng], { radius: 6, color: '#0b1a14', weight: 2, fillColor: REPORT_COLOR[r.kind], fillOpacity: 1 })
+    L.circleMarker([r.lat, r.lng], { radius: 6, color: '#fff', weight: 2, fillColor: REPORT_COLOR[r.kind], fillOpacity: 1 })
       .bindTooltip(`市民回報：${REPORT_LABEL[r.kind]}<br>${placeOf(r)}`)
       .addTo(reportLayer)
   }
@@ -553,7 +555,7 @@ watch([mode, threshold, fills, grid, bins, district, trucks, dispatches], () => 
 watch([reports, freshIds], drawReports)
 
 onMounted(async () => {
-  map.value = createMap(mapEl.value!, { theme: 'dark', zoom: 13, center: [25.05, 121.545] })
+  map.value = createMap(mapEl.value!, { theme: 'light', zoom: 13, center: [25.05, 121.545] })
   const [b, g, meta, off] = await Promise.all([loadBins(), loadGrid(), loadMeta(), loadOfficial()])
   official.value = off
   mock.value = isMock(meta)
@@ -581,17 +583,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="theme-dark flex h-full flex-col bg-night text-night-text">
+  <div class="theme-gov flex h-full flex-col bg-night text-night-text">
     <!-- 頂部 -->
-    <header class="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-b border-night-line px-4 py-3 lg:flex-nowrap lg:px-5">
+    <header class="gov-bar flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-t-4 border-truck bg-sign-deep px-4 py-3 text-white lg:flex-nowrap lg:px-5">
       <div class="flex items-center gap-3">
-        <div class="rounded-[9px] bg-sign p-[3px]">
+        <div class="rounded-[9px] bg-sign p-[3px] ring-1 ring-white/30">
           <div class="rounded-[6px] border-[1.5px] border-white/90 px-2.5 py-1 text-sm font-bold tracking-[0.08em] text-white">台北桶報局</div>
         </div>
         <h1 class="text-lg font-bold">市府戰情</h1>
+        <span class="hidden rounded-full bg-truck px-2 py-0.5 text-xs font-bold text-ink 2xl:inline">市府內部</span>
       </div>
 
-      <dl class="order-3 flex w-full gap-6 overflow-x-auto lg:order-none lg:w-auto lg:flex-1 lg:justify-center lg:gap-10">
+      <dl class="order-3 flex w-full gap-6 overflow-x-auto lg:order-none lg:w-auto lg:flex-1 lg:justify-center-safe lg:gap-10">
         <div class="shrink-0">
           <template v-if="district">
             <dt class="text-xs text-night-mute">{{ district }}點位（開放資料）</dt>
@@ -618,14 +621,14 @@ onBeforeUnmount(() => {
 
       <div class="ml-auto flex items-center gap-3 text-sm lg:ml-0">
         <span v-if="mock" class="rounded-full border border-night-line px-2.5 py-0.5 text-xs text-night-mute">模擬資料</span>
-        <span class="flex items-center gap-1.5 text-xs" :class="source === 'api' ? 'text-[#7fd6a4]' : 'text-truck'">
-          <span class="h-2 w-2 rounded-full" :class="source === 'api' ? 'bg-[#7fd6a4]' : 'bg-truck'" />
+        <span class="flex items-center gap-1.5 text-xs" :class="source === 'api' ? 'text-ok' : 'text-truck'">
+          <span class="h-2 w-2 rounded-full" :class="source === 'api' ? 'bg-ok' : 'bg-truck'" />
           {{ source === 'api' ? '即時連線' : '離線模式' }}
         </span>
         <time class="num text-lg text-night-mute">{{ now.toLocaleTimeString('zh-TW', { hour12: false }) }}</time>
-        <RouterLink :to="{ path: '/3d', query: district ? { d: district } : {} }" class="rounded-full border border-truck/60 px-3 py-1.5 text-xs font-bold text-truck hover:bg-night-2" title="切換到立體城市視角，看清運路線與缺口">3D 城市戰情室</RouterLink>
-        <RouterLink to="/qr" class="rounded-full border border-night-line px-3 py-1.5 text-xs font-bold hover:bg-night-2">列印 QR</RouterLink>
-        <RouterLink to="/" class="rounded-full bg-night-3 px-3 py-1.5 text-xs font-bold hover:bg-night-line">市民端</RouterLink>
+        <RouterLink :to="{ path: '/3d', query: district ? { d: district } : {} }" class="rounded-full border border-truck/60 px-3 py-1.5 text-xs font-bold text-truck hover:bg-white/10" title="切換到立體城市視角，看清運路線與缺口">3D 城市戰情室</RouterLink>
+        <RouterLink to="/qr" class="rounded-full border border-night-line px-3 py-1.5 text-xs font-bold hover:bg-white/10">列印 QR</RouterLink>
+        <RouterLink to="/" class="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-sign-deep hover:bg-sign-soft">市民端</RouterLink>
       </div>
     </header>
 
@@ -636,7 +639,7 @@ onBeforeUnmount(() => {
         :key="d || 'all'"
         class="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition"
         :class="[
-          district === d ? 'border-truck bg-truck font-bold text-ink' : 'border-night-line hover:bg-night-2',
+          district === d ? 'border-truck bg-truck font-bold text-ink' : 'border-night-line bg-white hover:bg-night-2',
           d && !binCountByDistrict.get(d) ? 'opacity-45' : '',
         ]"
         :aria-pressed="district === d"
@@ -651,7 +654,7 @@ onBeforeUnmount(() => {
           :class="district === d ? 'bg-ink/15' : 'bg-alert/90 text-white'"
           :title="'待清運'"
         >{{ d ? dueByDistrict.get(d) : bins.filter(isDue).length }}</span>
-        <span v-if="d && onDutyByDistrict.get(d)" class="h-2 w-2 rounded-full bg-[#7fd6a4]" title="有車出勤中" />
+        <span v-if="d && onDutyByDistrict.get(d)" class="h-2 w-2 rounded-full bg-ok" title="有車出勤中" />
       </button>
     </nav>
 
@@ -667,7 +670,7 @@ onBeforeUnmount(() => {
               role="tab"
               :aria-selected="mode === m"
               class="rounded-[7px] py-2 transition"
-              :class="mode === m ? 'bg-night-3 font-bold text-white shadow-[inset_0_-2px_0_#ffc72c]' : 'text-night-mute hover:text-night-text'"
+              :class="mode === m ? 'bg-white font-bold text-ink shadow-[inset_0_-2px_0_var(--color-truck-deep)]' : 'text-night-mute hover:text-night-text'"
               @click="mode = m"
             >
               {{ m === 'gap' ? '缺口熱區' : '清運調度' }}
@@ -680,7 +683,7 @@ onBeforeUnmount(() => {
             <h2 class="text-base font-bold">{{ district || '全市' }}哪裡最缺垃圾桶</h2>
             <p class="mt-1 text-sm leading-relaxed text-night-mute">人流和陳情多、垃圾桶少的地方。每格 {{ grid?.cellMeters ?? 250 }} 公尺見方，{{ district || '地圖上' }}共 {{ visibleBins.length }} 個垃圾桶點位。</p>
             <p class="mt-2 text-sm leading-relaxed text-night-mute">
-              其中 <span class="num text-base font-semibold text-truck">{{ staleCount }}</span> 桶超過 14 天沒人確認，已列入市民端的巡桶任務。
+              其中 <span class="num text-base font-semibold text-truck-ink">{{ staleCount }}</span> 桶超過 14 天沒人確認，已列入市民端的巡桶任務。
             </p>
             <div class="mt-3 flex items-center gap-2 text-xs text-night-mute">
               <span>缺口小</span>
@@ -696,10 +699,10 @@ onBeforeUnmount(() => {
                 <button class="group flex w-full items-center gap-3 border-t border-night-line py-2.5 text-left first:border-t-0" @click="flyTo(s.cell.lat, s.cell.lng)">
                   <span class="num grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-truck text-[15px] font-bold text-ink">{{ i + 1 }}</span>
                   <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm group-hover:text-truck">{{ s.place }}</span>
+                    <span class="block truncate text-sm group-hover:text-sign">{{ s.place }}</span>
                     <span class="block text-xs text-night-mute">{{ s.district }}<template v-if="s.cell.supply === 0">，這一格沒有垃圾桶點位</template><template v-else>，這一格只有 {{ s.cell.supply }} 個點位</template></span>
                   </span>
-                  <span class="num shrink-0 text-right text-sm text-[#ffb27a]" :title="'缺口分數'">{{ s.cell.gap.toFixed(2) }}</span>
+                  <span class="num shrink-0 text-right text-sm text-warn-ink" :title="'缺口分數'">{{ s.cell.gap.toFixed(2) }}</span>
                 </button>
               </li>
             </ol>
@@ -711,7 +714,7 @@ onBeforeUnmount(() => {
                 <button class="group flex w-full items-center gap-3 border-t border-night-line py-2 text-left first:border-t-0" @click="flyTo(x.bin.lat, x.bin.lng)">
                   <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-alert" />
                   <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm group-hover:text-truck">{{ x.bin.road }}</span>
+                    <span class="block truncate text-sm group-hover:text-sign">{{ x.bin.road }}</span>
                     <span class="block text-xs text-night-mute">{{ x.bin.district }}，最近的桶在 {{ Math.round(x.nearest) }} 公尺外</span>
                   </span>
                 </button>
@@ -725,17 +728,17 @@ onBeforeUnmount(() => {
             <p class="mt-1 text-sm leading-relaxed text-night-mute">每區有自己的清潔隊。選一區排路線、派車。</p>
             <label class="mt-4 block text-xs text-night-mute">
               <span class="flex justify-between"><span>填滿多少就派車</span><span class="num text-sm text-night-text">{{ Math.round(threshold * 100) }}%</span></span>
-              <input v-model.number="threshold" type="range" min="0.5" max="1" step="0.05" class="mt-2 w-full accent-[#ffc72c]" />
+              <input v-model.number="threshold" type="range" min="0.5" max="1" step="0.05" class="mt-2 w-full accent-[#c79400]" />
             </label>
             <ul class="mt-4">
               <li v-for="d in [...DISTRICTS].filter((x) => binCountByDistrict.get(x)).sort((a, b) => (dueByDistrict.get(b) ?? 0) - (dueByDistrict.get(a) ?? 0))" :key="d">
                 <button class="group flex w-full items-center gap-3 border-t border-night-line py-2.5 text-left first:border-t-0" @click="district = d">
-                  <span class="w-14 shrink-0 text-sm group-hover:text-truck">{{ d }}</span>
+                  <span class="w-14 shrink-0 text-sm group-hover:text-sign">{{ d }}</span>
                   <span class="block h-2 flex-1 rounded-r-full bg-night-2">
                     <span class="block h-full rounded-r-full bg-alert/80" :style="{ width: `${((dueByDistrict.get(d) ?? 0) / Math.max(1, ...dueByDistrict.values())) * 100}%` }" />
                   </span>
-                  <span class="num w-8 shrink-0 text-right text-sm text-[#ff8a8d]">{{ dueByDistrict.get(d) ?? 0 }}</span>
-                  <span class="w-12 shrink-0 text-right text-xs" :class="onDutyByDistrict.get(d) ? 'text-[#7fd6a4]' : 'text-night-mute'">{{ onDutyByDistrict.get(d) ? `${onDutyByDistrict.get(d)} 車出勤` : '待命' }}</span>
+                  <span class="num w-8 shrink-0 text-right text-sm text-alert-ink">{{ dueByDistrict.get(d) ?? 0 }}</span>
+                  <span class="w-12 shrink-0 text-right text-xs" :class="onDutyByDistrict.get(d) ? 'text-ok' : 'text-night-mute'">{{ onDutyByDistrict.get(d) ? `${onDutyByDistrict.get(d)} 車出勤` : '待命' }}</span>
                 </button>
               </li>
             </ul>
@@ -746,13 +749,13 @@ onBeforeUnmount(() => {
           <template v-else>
             <h2 class="text-base font-bold">{{ district }}今天要先收哪些</h2>
             <p class="mt-1 text-sm leading-relaxed text-night-mute">
-              <span class="num text-lg font-semibold text-truck">{{ fullBins.length }}</span> 桶超過門檻還沒派車，路線合計約
+              <span class="num text-lg font-semibold text-truck-ink">{{ fullBins.length }}</span> 桶超過門檻還沒派車，路線合計約
               <span class="num text-lg font-semibold text-night-text">{{ routeKm.toFixed(1) }}</span> 公里（含返隊）
             </p>
-            <p v-if="assignedCount" class="mt-1 text-xs text-[#7fd6a4]">另有 {{ assignedCount }} 桶已有車在收，返隊後會視為已清空。</p>
+            <p v-if="assignedCount" class="mt-1 text-xs text-ok">另有 {{ assignedCount }} 桶已有車在收，返隊後會視為已清空。</p>
             <label class="mt-4 block text-xs text-night-mute">
               <span class="flex justify-between"><span>填滿多少就派車</span><span class="num text-sm text-night-text">{{ Math.round(threshold * 100) }}%</span></span>
-              <input v-model.number="threshold" type="range" min="0.5" max="1" step="0.05" class="mt-2 w-full accent-[#ffc72c]" />
+              <input v-model.number="threshold" type="range" min="0.5" max="1" step="0.05" class="mt-2 w-full accent-[#c79400]" />
             </label>
 
             <div class="mt-4 flex items-center justify-between text-xs text-night-mute">
@@ -762,7 +765,7 @@ onBeforeUnmount(() => {
                   v-for="n in MAX_TRUCKS"
                   :key="n"
                   class="num h-7 w-8 rounded-[6px] text-sm"
-                  :class="trucks === n ? 'bg-night-3 font-bold text-white shadow-[inset_0_-2px_0_#ffc72c]' : 'bg-night-2 hover:text-night-text'"
+                  :class="trucks === n ? 'bg-white font-bold text-ink shadow-[inset_0_-2px_0_var(--color-truck-deep)]' : 'bg-night-2 hover:text-night-text'"
                   :disabled="n > Math.max(1, fullBins.length)"
                   @click="trucks = n"
                 >{{ n }}</button>
@@ -780,8 +783,8 @@ onBeforeUnmount(() => {
                   <li v-for="(b, i) in p.stops" :key="b.id">
                     <button class="group flex w-full items-center gap-2 py-1 text-left" @click="flyTo(b.lat, b.lng, 18)">
                       <span class="num w-5 shrink-0 text-right text-xs text-night-mute">{{ i + 1 }}</span>
-                      <span class="min-w-0 flex-1 truncate text-sm group-hover:text-truck">{{ b.road }}</span>
-                      <span class="num shrink-0 text-xs text-[#ff8a8d]">{{ Math.round((fillById.get(b.id) ?? 0) * 100) }}%</span>
+                      <span class="min-w-0 flex-1 truncate text-sm group-hover:text-sign">{{ b.road }}</span>
+                      <span class="num shrink-0 text-xs text-alert-ink">{{ Math.round((fillById.get(b.id) ?? 0) * 100) }}%</span>
                     </button>
                   </li>
                 </ol>
@@ -804,7 +807,7 @@ onBeforeUnmount(() => {
             </h3>
             <p v-if="efficiency" class="mt-1 text-xs leading-relaxed text-night-mute">
               已返隊 {{ efficiency.trips }} 趟，實際用時是預估的
-              <span class="num text-sm" :class="efficiency.ratio > 1.1 ? 'text-[#ff8a8d]' : 'text-[#7fd6a4]'">{{ Math.round(efficiency.ratio * 100) }}%</span>，平均每桶
+              <span class="num text-sm" :class="efficiency.ratio > 1.1 ? 'text-alert-ink' : 'text-ok'">{{ Math.round(efficiency.ratio * 100) }}%</span>，平均每桶
               <span class="num text-sm text-night-text">{{ efficiency.perStop.toFixed(1) }}</span> 分鐘
             </p>
             <p v-if="!todayDispatches.length" class="mt-2 text-xs leading-relaxed text-night-mute">按「派出」記下出發時間，車子回來按「返隊」。累積下來就能比較各區的清運效率，校正之後的派車。</p>
@@ -817,7 +820,7 @@ onBeforeUnmount(() => {
                     {{ timeFmt(d.departedAt) }} 出發<template v-if="d.returnedAt"> → {{ timeFmt(d.returnedAt) }} 返隊，用時 {{ minutesBetween(d.departedAt, d.returnedAt) }} 分（預估 {{ d.estMin }}）</template><template v-else>，預估 {{ d.estMin }} 分</template>
                   </span>
                 </span>
-                <button v-if="!d.returnedAt" class="shrink-0 rounded-full bg-[#7fd6a4] px-2.5 py-1 text-xs font-bold text-ink" @click="returnTruck(d.id)">返隊</button>
+                <button v-if="!d.returnedAt" class="shrink-0 rounded-full bg-sign px-2.5 py-1 text-xs font-bold text-white" @click="returnTruck(d.id)">返隊</button>
                 <img v-else-if="d.photo" :src="d.photo" alt="清運完成照片" class="h-9 w-12 shrink-0 rounded-[6px] object-cover" />
                 <label v-else class="shrink-0 cursor-pointer rounded-full border border-night-line px-2.5 py-1 text-xs text-night-mute hover:text-night-text" title="清完拍照回傳，市民的回報頁也看得到">
                   拍照回傳
@@ -858,7 +861,7 @@ onBeforeUnmount(() => {
               >
                 <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: REPORT_COLOR[r.kind] }" />
                 <span class="min-w-0 flex-1">
-                  <span class="flex items-center gap-2 text-sm font-bold" :style="{ color: REPORT_COLOR[r.kind] }">
+                  <span class="flex items-center gap-2 text-sm font-bold" :style="{ color: REPORT_TEXT[r.kind] }">
                     {{ REPORT_LABEL[r.kind] }}
                     <span v-if="reportStatus(r)" class="rounded-full px-2 py-px text-[11px] font-bold" :class="reportStatus(r)!.cls">{{ reportStatus(r)!.text }}</span>
                     <span v-if="count > 1" class="num ml-auto rounded-full bg-night-3 px-2 py-px text-[11px] font-bold text-night-text" :title="'同一桶的回報已合併成一個案件'">{{ count }} 人回報</span>
@@ -882,7 +885,7 @@ onBeforeUnmount(() => {
               <span class="text-night-mute">{{ d.district }}</span>
               <span v-if="d.missing" class="text-xs text-night-mute">資料缺漏，不列入排名</span>
               <span v-else class="block h-2.5 rounded-r-full bg-night-2">
-                <span class="block h-full rounded-r-full bg-truck/85" :style="{ width: `${d.share * 100}%` }" />
+                <span class="block h-full rounded-r-full bg-truck-deep/85" :style="{ width: `${d.share * 100}%` }" />
               </span>
             </li>
           </ul>
