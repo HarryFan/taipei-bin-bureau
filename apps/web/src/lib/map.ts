@@ -23,23 +23,11 @@ const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenS
 
 /**
  * 底圖來源，依序嘗試：前一個連不上（網路擋、服務掛）就自動換下一個。
- * CARTO 配色最好；OpenStreetMap 最通用；國土測繪中心是政府圖資，公部門網路通常放行。
+ * 國土測繪中心是政府圖資、中文地名，公部門網路通常放行；OpenStreetMap 當備用。
+ * 不用 CARTO：它現在沒有 API key 會回一張「API KEY REQUIRED」圖磚（HTTP 200），切換機制偵測不到。
  */
 function sources(theme: Theme): TileSource[] {
   return [
-    {
-      name: 'CARTO',
-      url:
-        theme === 'dark'
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      options: { subdomains: 'abcd', maxZoom: 19, attribution: `${OSM_ATTR} &copy; <a href="https://carto.com/attributions">CARTO</a>` },
-    },
-    {
-      name: 'OpenStreetMap',
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      options: { maxZoom: 19, attribution: OSM_ATTR, className: theme === 'dark' ? 'tiles-dim' : 'tiles-soft' },
-    },
     {
       name: '國土測繪中心',
       url: 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',
@@ -48,6 +36,11 @@ function sources(theme: Theme): TileSource[] {
         attribution: '&copy; <a href="https://maps.nlsc.gov.tw/">內政部國土測繪中心</a>',
         className: theme === 'dark' ? 'tiles-dim' : 'tiles-soft',
       },
+    },
+    {
+      name: 'OpenStreetMap',
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      options: { maxZoom: 19, attribution: OSM_ATTR, className: theme === 'dark' ? 'tiles-dim' : 'tiles-soft' },
     },
   ]
 }
