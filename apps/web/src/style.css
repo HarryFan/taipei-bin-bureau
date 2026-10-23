@@ -131,3 +131,8 @@ body {
     animation: none;
   }
 }
+
+/* 備用底圖沒有深色版，在戰情室調暗以配合深色介面 */
+.tiles-dim {
+  filter: brightness(0.55) saturate(0.6) contrast(1.1) hue-rotate(10deg);
+}
