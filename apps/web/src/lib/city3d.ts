@@ -16,6 +16,9 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
+import { HorizontalTiltShiftShader } from 'three/examples/jsm/shaders/HorizontalTiltShiftShader.js'
+import { VerticalTiltShiftShader } from 'three/examples/jsm/shaders/VerticalTiltShiftShader.js'
 import type { Bin, GridData } from '../types'
 import type { LatLng } from './geo'
 
@@ -53,6 +56,8 @@ function seeded(seed: number) {
 export interface RoutePlan3D {
   color: string
   path: LatLng[]
+  /** 已出勤：實心路線 + 垃圾車；未派車：半透明預覽 */
+  active?: boolean
 }
 
 export interface HoverInfo {
@@ -85,9 +90,14 @@ export class City3D {
   private growStart = -1
   private clouds: { obj: THREE.Group; speed: number }[] = []
   private night = false
+  private lastInteract = performance.now()
+  onPick?: (bin: Bin) => void
+  private downAt?: { x: number; y: number }
   private lastT = 0
   private composer?: EffectComposer
   private bloom?: UnrealBloomPass
+  private tiltH?: ShaderPass
+  private tiltV?: ShaderPass
   private wallMat = new THREE.MeshStandardMaterial({ roughness: 0.85, emissive: '#ffcf7a', emissiveIntensity: 0 })
   private binMesh?: THREE.InstancedMesh
   private binLidMesh?: THREE.InstancedMesh
@@ -134,6 +144,12 @@ export class City3D {
     this.controls.minDistance = 25
     this.controls.maxDistance = 1200
     this.controls.screenSpacePanning = false
+    // 閒置 20 秒後鏡頭慢慢環繞，適合投在大螢幕上展示；一碰就停
+    this.controls.autoRotateSpeed = 0.35
+    this.controls.addEventListener('start', () => {
+      this.controls.autoRotate = false
+      this.lastInteract = performance.now()
+    })
 
     this.scene.add(this.hemi)
     this.sun.position.set(-120, 220, 90)
@@ -151,6 +167,12 @@ export class City3D {
     this.setNight(false)
 
     this.renderer.domElement.addEventListener('pointermove', this.onPointerMove)
+    this.renderer.domElement.addEventListener('pointerdown', (e) => (this.downAt = { x: e.clientX, y: e.clientY }))
+    this.renderer.domElement.addEventListener('pointerup', (e) => {
+      // 拖曳旋轉不算點擊
+      if (!this.downAt || Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y) > 5) return
+      if (this.lastHover >= 0) this.onPick?.(this.bins[this.lastHover])
+    })
     this.renderer.domElement.addEventListener('pointerleave', this.onPointerLeave)
     this.resizeObs = new ResizeObserver(() => this.resize())
     this.resizeObs.observe(el)
@@ -194,11 +216,11 @@ export class City3D {
     this.tileCells = all.map((c) => ({ id: c.id, gap: c.gap, land: c.land, pos: this.project(c.lat, c.lng) }))
     this.cellUnits = cellUnits
     // 缺口光柱：缺口越大越高，只在缺口模式顯示
-    const barGeo = new THREE.BoxGeometry(cellUnits * 0.62, 1, cellUnits * 0.62)
+    const barGeo = new THREE.BoxGeometry(cellUnits * 0.42, 1, cellUnits * 0.42)
     barGeo.translate(0, 0.5, 0)
     this.gapBars = new THREE.InstancedMesh(
       barGeo,
-      new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.82, emissive: '#ff6a2a', emissiveIntensity: 0.25, roughness: 0.4 }),
+      new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.6, emissive: '#ff6a2a', emissiveIntensity: 0.3, roughness: 0.4, depthWrite: false }),
       all.length,
     )
     this.gapBars.count = 0
@@ -368,13 +390,30 @@ export class City3D {
   /** 候選新設點：黃色編號圖釘 */
   setPins(items: { lat: number; lng: number; label: string }[]) {
     this.pinGroup.clear()
+    // 候選新設點：半透明的「虛擬垃圾桶」＋地面光圈，表示「這裡可以放一個」
+    const ghostMat = new THREE.MeshStandardMaterial({ color: '#ffc72c', emissive: '#ffb000', emissiveIntensity: 0.45, transparent: true, opacity: 0.55, depthWrite: false })
+    const ringMat = new THREE.MeshBasicMaterial({ color: '#ffc72c', transparent: true, opacity: 0.8, side: THREE.DoubleSide })
+    const body = new THREE.CylinderGeometry(0.9, 0.75, 2.4, 14)
+    body.translate(0, 1.2, 0)
+    const ring = new THREE.RingGeometry(2.2, 2.7, 40)
+    ring.rotateX(-Math.PI / 2)
+    items.forEach((it) => {
+      const p = this.project(it.lat, it.lng)
+      const ghost = new THREE.Mesh(body, ghostMat)
+      ghost.position.copy(p)
+      ghost.userData.ghost = true
+      const r = new THREE.Mesh(ring, ringMat)
+      r.position.copy(p).setY(0.08)
+      r.userData.ring = true
+      this.pinGroup.add(ghost, r)
+    })
     items.forEach((it, i) => {
       const el = document.createElement('div')
       el.className = 'city3d-pin'
       el.textContent = String(i + 1)
       el.title = it.label
       const obj = new CSS2DObject(el)
-      obj.position.copy(this.project(it.lat, it.lng, 5))
+      obj.position.copy(this.project(it.lat, it.lng, 6))
       this.pinGroup.add(obj)
     })
   }
@@ -399,7 +438,7 @@ export class City3D {
         const t = Math.min(1, Math.sqrt(cell.gap / maxGap))
         c.lerp(ramp(t), 0.55 + t * 0.4)
         if (t > 0.35 && this.gapBars) {
-          m.compose(cell.pos.clone().setY(0), q, new THREE.Vector3(1, 3 + t * t * 34, 1))
+          m.compose(cell.pos.clone().setY(0), q, new THREE.Vector3(1, 2 + t * t * 16, 1))
           this.gapBars.setMatrixAt(bars, m)
           this.gapBars.setColorAt(bars, ramp(t))
           bars++
@@ -451,16 +490,25 @@ export class City3D {
       roof.position.copy(hq.position).setY(2.35)
       this.routeGroup.add(hq, roof)
     }
+    // 有車出勤時只讓出勤的車跑；還沒派車時讓預覽路線的車跑，示意會怎麼走
+    const anyActive = plans.some((p) => p.active)
     for (const plan of plans) {
       const pts = plan.path.map(([lat, lng]) => this.project(lat, lng, 0.6))
       if (pts.length < 2) continue
       const curve = new THREE.CurvePath<THREE.Vector3>()
       for (let i = 1; i < pts.length; i++) curve.add(new THREE.LineCurve3(pts[i - 1], pts[i]))
       const tube = new THREE.Mesh(
-        new THREE.TubeGeometry(curve, pts.length * 8, 0.55, 8, false),
-        new THREE.MeshStandardMaterial({ color: plan.color, emissive: plan.color, emissiveIntensity: 0.5 }),
+        new THREE.TubeGeometry(curve, pts.length * 8, plan.active ? 0.6 : 0.4, 8, false),
+        new THREE.MeshStandardMaterial({
+          color: plan.color,
+          emissive: plan.color,
+          emissiveIntensity: plan.active ? 0.6 : 0.3,
+          transparent: !plan.active,
+          opacity: plan.active ? 1 : 0.5,
+        }),
       )
       this.routeGroup.add(tube)
+      if (anyActive && !plan.active) continue
       const truck = this.makeTruck(plan.color)
       this.routeGroup.add(truck)
       const seg = [0]
@@ -519,20 +567,57 @@ export class City3D {
     this.flight = { from: this.camera.position.clone(), to, fromT: this.controls.target.clone(), toT: center, t0: performance.now(), dur: this.reduceMotion ? 1 : 1100 }
   }
 
+  /** 天空漸層（後製需要不透明背景，所以天空畫在場景裡而不是 CSS） */
+  private skyTexture(night: boolean) {
+    const c = document.createElement('canvas')
+    c.width = 4
+    c.height = 512
+    const g = c.getContext('2d')!
+    const grad = g.createLinearGradient(0, 0, 0, 512)
+    if (night) {
+      grad.addColorStop(0, '#060d16')
+      grad.addColorStop(0.6, '#0f1e30')
+      grad.addColorStop(1, '#1b2f45')
+    } else {
+      grad.addColorStop(0, '#a9d6e3')
+      grad.addColorStop(0.55, '#d4ebef')
+      grad.addColorStop(1, '#f1f1e6')
+    }
+    g.fillStyle = grad
+    g.fillRect(0, 0, 4, 512)
+    const tex = new THREE.CanvasTexture(c)
+    tex.colorSpace = THREE.SRGBColorSpace
+    return tex
+  }
+
+  flyToBin(bin: Bin) {
+    this.lastInteract = performance.now()
+    this.controls.autoRotate = false
+    const center = this.project(bin.lat, bin.lng)
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize()
+    this.flight = { from: this.camera.position.clone(), to: center.clone().add(dir.multiplyScalar(85)), fromT: this.controls.target.clone(), toT: center, t0: performance.now(), dur: this.reduceMotion ? 1 : 900 }
+  }
+
   setNight(night: boolean) {
     this.night = night
-    // 夜間：開 bloom 讓窗戶、垃圾桶、路線發光。bloom 需要不透明背景，所以夜間改用實心天空色
-    if (night && !this.composer) {
+    // 後製：移軸景深讓城市像微縮模型（畫面上下緣柔焦），夜間再加 bloom 讓窗戶、垃圾桶、路線發光
+    if (!this.composer) {
       this.composer = new EffectComposer(this.renderer)
       this.composer.addPass(new RenderPass(this.scene, this.camera))
       this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.6, 0.72)
       this.composer.addPass(this.bloom)
+      this.tiltH = new ShaderPass(HorizontalTiltShiftShader)
+      this.tiltV = new ShaderPass(VerticalTiltShiftShader)
+      this.tiltH.uniforms.r.value = this.tiltV.uniforms.r.value = 0.5
+      this.composer.addPass(this.tiltH)
+      this.composer.addPass(this.tiltV)
       this.composer.addPass(new OutputPass())
       this.resize()
     }
+    this.bloom!.enabled = night
     // 天空交給 CSS 漸層（容器背景），霧色取天空下緣，遠處的水面自然融進天際
     const bg = new THREE.Color(night ? '#0a1420' : '#d7ecef')
-    this.scene.background = night ? bg : null
+    this.scene.background = this.skyTexture(night)
     this.scene.fog = new THREE.Fog(bg, 900, 2200)
     this.hemi.intensity = night ? 0.75 : 1.1
     this.hemi.color.set(night ? '#8fa6c8' : '#ffffff')
@@ -582,6 +667,11 @@ export class City3D {
     this.renderer.setSize(w, h)
     this.labels.setSize(w, h)
     this.composer?.setSize(w, h)
+    // 移軸模糊強度和畫面大小成反比，不同螢幕看起來一致
+    if (this.tiltH && this.tiltV) {
+      this.tiltH.uniforms.h.value = 1.1 / w
+      this.tiltV.uniforms.v.value = 1.1 / h
+    }
   }
 
   private loop = () => {
@@ -595,7 +685,10 @@ export class City3D {
       this.controls.target.lerpVectors(this.flight.fromT, this.flight.toT, e)
       if (k >= 1) this.flight = undefined
     }
+    if (!this.controls.autoRotate && !this.flight && performance.now() - this.lastInteract > 20000 && !this.reduceMotion) this.controls.autoRotate = true
     this.controls.update()
+    // 候選點的光圈呼吸
+    for (const c of this.pinGroup.children) if (c.userData.ring) c.scale.setScalar(1 + Math.sin(t * 2.4) * 0.12)
 
     // 快滿的桶：警示標記上下浮動
     if (this.dueMarkers && this.dueIdx.length) {
@@ -654,7 +747,7 @@ export class City3D {
 
     this.lastT = t
     this.pick()
-    if (this.night && this.composer) this.composer.render()
+    if (this.composer) this.composer.render()
     else this.renderer.render(this.scene, this.camera)
     this.labels.render(this.scene, this.camera)
   }

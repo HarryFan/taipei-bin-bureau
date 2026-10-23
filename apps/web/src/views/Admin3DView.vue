@@ -32,7 +32,17 @@ const reports = ref<Report[]>([])
 const dispatches = ref<Dispatch[]>([])
 const mock = ref(true)
 const hover = ref<HoverInfo>()
+const selected = ref<Bin>()
+const selectedReports = computed(() => (selected.value ? reports.value.filter((r) => r.binId === selected.value!.id).slice(0, 3) : []))
+const selectedStatus = computed(() => {
+  const b = selected.value
+  if (!b) return ''
+  if (onDuty.value.some((d) => d.stops.includes(b.id)) || dispatches.value.some((d) => !d.returnedAt && d.stops.includes(b.id))) return '清運車已出發'
+  return isDue(b) ? '超過門檻，待派車' : ''
+})
 const loading = ref(true)
+/** 進場標題：城市長出來的那幾秒顯示 */
+const intro = ref(true)
 let loaded = false
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const cleanups: (() => void)[] = []
@@ -115,8 +125,18 @@ function syncScene() {
   if (!c) return
   c.updateBins(fillById.value, threshold, district.value || undefined)
   c.paintTiles(mode.value === 'gap' ? 'gap' : 'plain', district.value ? (id) => cellDistrict.value.get(id) === district.value : undefined)
+  const loop = (stops: Bin[]): LatLng[] => [depot.value, ...stops.map((b) => [b.lat, b.lng] as LatLng), depot.value]
   c.setRoutes(
-    mode.value === 'route' ? plans.value.map((p) => ({ color: p.color, path: [depot.value, ...p.stops.map((b) => [b.lat, b.lng] as LatLng), depot.value] })) : [],
+    mode.value === 'route'
+      ? [
+          ...plans.value.map((p) => ({ color: p.color, path: loop(p.stops) })),
+          ...(district.value ? onDuty.value : []).map((d) => ({
+            color: TRUCK_COLORS[(d.truck - 1) % 3],
+            path: loop(d.stops.map((id) => binById.value.get(id)).filter((b): b is Bin => !!b)),
+            active: true,
+          })),
+        ]
+      : [],
     mode.value === 'route' && district.value ? depot.value : undefined,
   )
   c.setPins(mode.value === 'gap' ? candidates.value.map((x) => ({ lat: x.lat, lng: x.lng, label: `候選新設點，缺口 ${x.gap.toFixed(2)}` })) : [])
@@ -169,8 +189,14 @@ const timeFmt = (iso: string) => new Date(iso).toLocaleTimeString('zh-TW', { hou
 onMounted(async () => {
   const c = new City3D(stage.value!, ORIGIN)
   c.onHover = (h) => (hover.value = h)
+  c.onPick = (b) => {
+    selected.value = b
+    c.flyToBin(b)
+  }
   c.setInsetLeft(340)
   city.value = c
+  // 方便在瀏覽器 console 操作與自動化測試
+  ;(window as unknown as { __city3d?: City3D }).__city3d = c
   const [b, g, meta] = await Promise.all([loadBins(), loadGrid(), loadMeta()])
   bins.value = b
   grid.value = g
@@ -180,6 +206,7 @@ onMounted(async () => {
   syncScene()
   focus()
   loading.value = false
+  setTimeout(() => (intro.value = false), 2600)
   loaded = true
   pollTimer = setInterval(refresh, POLL_MS)
   cleanups.push(onLocalReportsChange(refresh), onLocalDispatchChange(refresh))
@@ -193,8 +220,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="city3d-sky relative h-full overflow-hidden text-ink" :class="night ? 'city3d-night' : ''">
-    <div ref="stage" class="absolute inset-0" />
+    <!-- isolate：CSS2D 標籤會自帶很大的 z-index，關在自己的堆疊層，才不會蓋到面板 -->
+    <div ref="stage" class="absolute inset-0 isolate" />
     <div v-if="loading" class="absolute inset-0 grid place-items-center text-sm text-mute">城市生成中…</div>
+    <Transition name="intro3d">
+      <div v-if="intro && !loading" class="pointer-events-none absolute inset-x-0 top-[30%] flex flex-col items-center gap-3 text-center">
+        <div class="rounded-[16px] bg-sign p-[5px] shadow-2xl">
+          <div class="rounded-[12px] border-[3px] border-white/90 px-8 py-3 text-4xl font-black tracking-[0.12em] text-white">台北桶報局</div>
+        </div>
+        <p class="rounded-full bg-white/85 px-4 py-1.5 text-sm font-bold tracking-[0.2em] text-ink backdrop-blur">661 個真實垃圾桶點位・即時清運調度</p>
+      </div>
+    </Transition>
 
     <!-- 左上：品牌 -->
     <div class="pointer-events-none absolute top-4 left-4 flex items-center gap-3">
@@ -322,6 +358,41 @@ onBeforeUnmount(() => {
       <p class="mt-2 text-mute">拖曳旋轉 · 滾輪縮放 · 右鍵平移</p>
     </div>
 
+    <!-- 點選的垃圾桶 -->
+    <Transition name="drop3d">
+      <div v-if="selected" class="absolute top-20 right-4 w-[300px] rounded-[18px] bg-white/95 p-4 shadow-xl backdrop-blur">
+        <div class="flex items-start gap-2">
+          <div class="min-w-0 flex-1">
+            <p class="text-xs text-mute">{{ selected.district }} · {{ selected.id.replace('bin-', '#') }}</p>
+            <p class="mt-0.5 text-base leading-snug font-bold">{{ selected.road }}</p>
+          </div>
+          <button class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-paper text-mute hover:text-ink" aria-label="關閉" @click="selected = undefined">✕</button>
+        </div>
+        <div class="mt-3 flex items-center gap-3">
+          <div class="flex flex-1 gap-[3px]" aria-hidden="true">
+            <span
+              v-for="i in 10"
+              :key="i"
+              class="h-2 flex-1 rounded-[2px]"
+              :style="{ background: i <= Math.round((fillById.get(selected.id) ?? 0) * 10) ? FILL_META[fillState(fillById.get(selected.id) ?? 0)].color : '#e3e9e5' }"
+            />
+          </div>
+          <span class="num shrink-0 text-sm font-bold">{{ Math.round((fillById.get(selected.id) ?? 0) * 100) }}%</span>
+        </div>
+        <p class="mt-1 text-xs text-mute">{{ FILL_META[fillState(fillById.get(selected.id) ?? 0)].label }}<template v-if="selectedStatus"> · <span class="font-bold text-ink">{{ selectedStatus }}</span></template></p>
+        <p class="mt-3 text-xs font-bold">市民回報</p>
+        <p v-if="!selectedReports.length" class="mt-1 text-xs text-mute">今天還沒有人回報這一桶。</p>
+        <ul class="mt-1 space-y-1">
+          <li v-for="r in selectedReports" :key="r.id" class="flex items-center gap-2 text-xs">
+            <span class="h-2 w-2 rounded-full" :style="{ background: REPORT_COLOR[r.kind] }" />
+            <span class="font-bold">{{ REPORT_LABEL[r.kind] }}</span>
+            <time class="num ml-auto text-mute">{{ timeFmt(r.createdAt) }}</time>
+          </li>
+        </ul>
+        <button v-if="selected.district !== district" class="mt-3 w-full rounded-[10px] bg-ink py-2 text-sm font-bold text-white" @click="district = selected.district">看{{ selected.district }}的清運調度</button>
+      </div>
+    </Transition>
+
     <!-- 滑過垃圾桶 -->
     <div
       v-if="hover"
@@ -338,6 +409,26 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
+.intro3d-leave-active {
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s ease;
+}
+.intro3d-leave-to {
+  opacity: 0;
+  transform: translateY(-24px) scale(0.96);
+}
+.drop3d-enter-active,
+.drop3d-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+.drop3d-enter-from,
+.drop3d-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
 .city3d-sky {
   background:
     radial-gradient(120% 80% at 50% 110%, rgb(255 236 200 / 0.55), transparent 60%),
