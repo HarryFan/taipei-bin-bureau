@@ -10,6 +10,9 @@ const TAIPEI_BOUNDS = L.latLngBounds([24.94, 121.43], [25.22, 121.68])
 
 type Theme = 'light' | 'dark'
 
+/** 底圖來源多久沒載入任何圖磚就換下一個 */
+const TILE_TIMEOUT_MS = 5000
+
 interface TileSource {
   name: string
   url: string
@@ -78,19 +81,27 @@ function useTilesWithFallback(map: L.Map, theme: Theme) {
     }
     let loaded = 0
     let failed = 0
+    let gaveUp = false
     const layer = L.tileLayer(src.url, src.options).addTo(map)
+    const giveUp = (reason: string) => {
+      if (gaveUp || loaded) return
+      gaveUp = true
+      clearTimeout(timer)
+      console.warn(`[地圖] ${src.name} 底圖${reason}，改用下一個來源`)
+      map.removeLayer(layer)
+      index++
+      tryNext()
+    }
+    // 有些網路會讓連線一直掛著、不會觸發 tileerror，所以也要設時限
+    const timer = setTimeout(() => giveUp('逾時沒回應'), TILE_TIMEOUT_MS)
     layer.on('tileload', () => {
       loaded++
+      clearTimeout(timer)
       note.style.display = 'none'
     })
     layer.on('tileerror', () => {
       failed++
-      if (!loaded && failed === 4) {
-        console.warn(`[地圖] ${src.name} 底圖連不上，改用下一個來源`)
-        map.removeLayer(layer)
-        index++
-        tryNext()
-      }
+      if (failed === 4) giveUp('連不上')
     })
   }
   tryNext()
