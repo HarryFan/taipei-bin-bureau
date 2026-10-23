@@ -1,0 +1,10 @@
+{
+ "bins": {
+  "kind": "mock",
+  "source": "bins.mock.csv"
+ },
+ "demand": {
+  "kind": "mock",
+  "source": "demand_points.mock.csv"
+ }
+}

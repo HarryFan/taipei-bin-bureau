@@ -6,11 +6,15 @@
 data/raw/        自行下載的原始開放資料（不進版控）
 data/interim/    轉成統一格式的中間檔（不進版控）
 data/private/    「市長你給我聽好了」資料集（僅限本活動，絕對不 commit）
-data/sample/     樣本資料，讓前端在沒下載資料前也能跑
+data/mock/       模擬資料（全台北市規模），沒有真實資料時的預設來源
 data/scripts/    轉換與模型腳本（只用 Python 標準庫）
 ```
 
 執行：`npm run data:build`（在 repo 根目錄）
+
+**優先順序**：`data/raw/bins.csv`、`data/interim/demand_points.csv` 存在就用真實資料，否則用 `data/mock/`。前端會讀 `meta.json`，用模擬資料時畫面上會標示「模擬資料」。
+
+**模擬資料**：`npm run data:mock` 重新產生。約 800 個垃圾桶集中在捷運站與商圈周邊，並在忠孝復興、東區、內科等人流大的地方刻意少放，模擬「垃圾桶沙漠」。捷運站與商圈為約略座標，人流數字是假設量級，不是真實統計。
 
 ## 資料集與分工
 

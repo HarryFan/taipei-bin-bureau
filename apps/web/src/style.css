@@ -1,11 +1,133 @@
 @import "tailwindcss";
+@import "@fontsource-variable/chiron-goround-tc";
+@import "@fontsource/barlow-semi-condensed/500.css";
+@import "@fontsource/barlow-semi-condensed/600.css";
+@import "@fontsource/barlow-semi-condensed/700.css";
 
-html, body, #app {
+/*
+ * 台北桶報局設計語彙：台灣道路指示牌 × 清潔隊垃圾車
+ * - sign：指示牌綠，品牌與路牌
+ * - truck：垃圾車黃，主要行動與清運
+ * - alert：滿溢與缺口最嚴重處
+ */
+@theme {
+  --font-sans: "Chiron GoRound TC Variable", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-num: "Barlow Semi Condensed", "Chiron GoRound TC Variable", system-ui, sans-serif;
+
+  --color-sign: #0b5d3b;
+  --color-sign-deep: #074229;
+  --color-sign-soft: #d7e6dd;
+  --color-truck: #ffc72c;
+  --color-truck-deep: #c79400;
+  --color-alert: #e5484d;
+  --color-paper: #eef2ef;
+  --color-ink: #10251c;
+  --color-mute: #56695f;
+  --color-hair: #d3ddd7;
+
+  --color-night: #0b1a14;
+  --color-night-2: #11251c;
+  --color-night-3: #1a3328;
+  --color-night-line: #24402f;
+  --color-night-text: #e6efe9;
+  --color-night-mute: #8fa89a;
+}
+
+html,
+body,
+#app {
   height: 100%;
 }
 
 body {
-  font-family: "Noto Sans TC", system-ui, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "palt";
+}
+
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-truck);
+  outline-offset: 2px;
+}
+
+/* Leaflet 調整：讓地圖控制項融入兩種主題 */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #dfe6e2;
+}
+.theme-dark .leaflet-container {
+  background: #0e1d17;
+}
+.leaflet-control-attribution {
+  font-size: 10px;
+}
+.theme-dark .leaflet-control-attribution {
+  background: rgb(11 26 20 / 0.7) !important;
+  color: #8fa89a;
+}
+.theme-dark .leaflet-control-attribution a {
+  color: #b8cfc2;
+}
+.theme-dark .leaflet-bar a {
+  background: #11251c;
+  color: #e6efe9;
+  border-color: #24402f;
+}
+.leaflet-tooltip {
+  font-family: var(--font-sans);
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 4px 16px rgb(16 37 28 / 0.18);
+}
+.theme-dark .leaflet-tooltip {
+  background: #11251c;
+  color: #e6efe9;
+}
+.theme-dark .leaflet-tooltip-top::before {
+  border-top-color: #11251c;
+}
+
+/* 清運路線的流動虛線 */
+.route-flow {
+  stroke-dasharray: 10 12;
+  animation: route-flow 1.2s linear infinite;
+}
+@keyframes route-flow {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+/* 新回報的擴散光環 */
+.ping-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 3px solid var(--c, #ffc72c);
+  animation: ping-ring 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes ping-ring {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-flow,
+  .ping-ring {
+    animation: none;
+  }
 }

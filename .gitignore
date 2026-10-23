@@ -16,3 +16,4 @@ data/interim/*
 data/private/*
 !data/private/.gitkeep
 *.tsbuildinfo
+__pycache__/

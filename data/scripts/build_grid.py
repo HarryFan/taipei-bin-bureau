@@ -1,6 +1,6 @@
 """把需求點與垃圾桶彙整成網格，算出缺口與建議新設點。
 
-輸入：data/interim/demand_points.csv（不存在就用 sample）
+輸入：data/interim/demand_points.csv（真實資料轉換後），不存在就用 data/mock/demand_points.mock.csv（模擬資料）
   欄位 lat,lng,source,value；source 為 mrt / bus / complaint / market
   每份開放資料先各自轉成這個格式，模型就不用管原始資料長怎樣。
 輸出：apps/web/public/data/grid.json
@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 POINTS = ROOT / "data" / "interim" / "demand_points.csv"
-SAMPLE_POINTS = ROOT / "data" / "sample" / "demand_points.sample.csv"
+MOCK_POINTS = ROOT / "data" / "mock" / "demand_points.mock.csv"
 BINS = ROOT / "apps" / "web" / "public" / "data" / "bins.json"
 OUT = ROOT / "apps" / "web" / "public" / "data" / "grid.json"
 
@@ -38,7 +38,7 @@ def cell_center(k: tuple[int, int]) -> tuple[float, float]:
 
 
 def main() -> None:
-    src = Path(sys.argv[1]) if len(sys.argv) > 1 else (POINTS if POINTS.exists() else SAMPLE_POINTS)
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else (POINTS if POINTS.exists() else MOCK_POINTS)
 
     raw: dict[tuple[int, int], dict[str, float]] = defaultdict(lambda: defaultdict(float))
     with src.open(encoding="utf-8-sig", newline="") as f:
@@ -79,6 +79,8 @@ def main() -> None:
         "cells": cells,
         "suggestions": suggestions,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
+    from build_bins import write_meta
+    write_meta("demand", "mock" if src == MOCK_POINTS else "real", src.name)
     print(f"{src.name} → {OUT.relative_to(ROOT)}：{len(cells)} 格，建議 {len(suggestions)} 處")
 
 

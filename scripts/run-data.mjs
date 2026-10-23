@@ -2,6 +2,8 @@
 import { spawnSync } from 'node:child_process'
 
 const STEPS = ['data/scripts/build_bins.py', 'data/scripts/build_grid.py', 'data/scripts/simulate_fill.py']
+// --mock：先重新產生模擬資料再建置
+if (process.argv.includes('--mock')) STEPS.unshift('data/scripts/generate_mock.py')
 const CANDIDATES = [['python3'], ['python'], ['py', '-3']]
 
 const python = CANDIDATES.find(([cmd, ...args]) => {

@@ -22,7 +22,8 @@ docs/slides 團隊規劃簡報（直接用瀏覽器開 index.html，← → 翻�
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm run data:build   # 重新產生 bins / grid / fill_levels
+npm run data:build   # 重新產生 bins / grid / fill_levels（有 data/raw 用真實資料，否則用 data/mock）
+npm run data:mock    # 重新產生模擬資料再建置
 npm run api          # 選配，啟動後在 apps/web/.env 設定 VITE_API_URL
 npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F 全螢幕、R 重播動畫）
 ```
@@ -49,13 +50,15 @@ npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F �
 | 「市長你給我聽好了」資料集 | 真實（去識別化，僅限本活動，未收錄於本 repo） |
 | 垃圾桶填滿率 | **模擬資料**（`data/scripts/simulate_fill.py`） |
 | 市民回報 | **模擬／Demo 現場產生** |
-| `data/sample/*` | **樣本資料**，正式資料下載前的佔位 |
+| `data/mock/*` | **模擬資料**：全台北市約 800 個垃圾桶、捷運站人流、公車站、陳情、商圈（`data/scripts/generate_mock.py` 產生，捷運站與商圈為約略座標，人流為假設量級） |
 
-地圖圖資：© OpenStreetMap contributors
+地圖圖資：© OpenStreetMap contributors © CARTO
 
 ## 使用的開源套件與 AI 工具
 
-- Vue、Vue Router、Vite、Tailwind CSS、Leaflet
+- Vue、Vue Router、Vite、Tailwind CSS、Leaflet、GSAP
+- 字型：Chiron GoRound TC、Barlow Semi Condensed（@fontsource，打包在專案內）
+- 底圖：CARTO Voyager / Dark Matter（© OpenStreetMap contributors © CARTO）
 - 簡報動畫：GSAP 3.12.5（docs/slides/gsap.min.js）
 - AI 工具：Claude（專案規劃與程式骨架）
 - TODO：其他成員使用的工具

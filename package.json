@@ -11,6 +11,7 @@
     "preview": "npm run preview -w apps/web",
     "api": "npm run start -w apps/api",
     "data:build": "node scripts/run-data.mjs",
-    "slides": "node scripts/serve-slides.mjs"
+    "slides": "node scripts/serve-slides.mjs",
+    "data:mock": "node scripts/run-data.mjs --mock"
   }
 }

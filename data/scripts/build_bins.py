@@ -1,7 +1,7 @@
 """把環保局「行人專用清潔箱」CSV 轉成前端用的 bins.json。
 
 用法：python3 data/scripts/build_bins.py [CSV 路徑]
-未指定時讀 data/raw/bins.csv，不存在就用 data/sample/bins.sample.csv。
+未指定時讀 data/raw/bins.csv（真實資料），不存在就用 data/mock/bins.mock.csv（模擬資料）。
 """
 import csv
 import json
@@ -10,7 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw" / "bins.csv"
-SAMPLE = ROOT / "data" / "sample" / "bins.sample.csv"
+MOCK = ROOT / "data" / "mock" / "bins.mock.csv"
+META = ROOT / "apps" / "web" / "public" / "data" / "meta.json"
 OUT = ROOT / "apps" / "web" / "public" / "data" / "bins.json"
 
 
@@ -32,7 +33,7 @@ def pick(row: dict, *keys: str) -> str:
 
 
 def main() -> None:
-    src = Path(sys.argv[1]) if len(sys.argv) > 1 else (RAW if RAW.exists() else SAMPLE)
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else (RAW if RAW.exists() else MOCK)
     bins = []
     for i, row in enumerate(read_rows(src)):
         try:
@@ -50,7 +51,15 @@ def main() -> None:
         })
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(bins, ensure_ascii=False, indent=1), encoding="utf-8")
+    write_meta("bins", "mock" if src == MOCK else "real", src.name)
     print(f"{src.name} → {OUT.relative_to(ROOT)}：{len(bins)} 個垃圾桶")
+
+
+def write_meta(key: str, kind: str, source: str) -> None:
+    """記錄前端用的是真實還是模擬資料，畫面上會標示"""
+    meta = json.loads(META.read_text(encoding="utf-8")) if META.exists() else {}
+    meta[key] = {"kind": kind, "source": source}
+    META.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":

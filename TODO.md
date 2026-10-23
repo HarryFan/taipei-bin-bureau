@@ -50,7 +50,11 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 - [x] **儀表板即時更新**：每 3 秒輪詢；新回報會跳通知、地圖標記閃爍、自動移到該位置，回報「滿了」時自動切到清運分頁
 - [x] API 逾時 4 秒自動退回本機資料，左上角顯示「即時連線 / 離線模式」
 - [x] 頂部列換成品牌色（深綠 `#14302A`、橘 `#E8833A`）
-- [ ] 視覺：Logo、首頁標語、整體質感（配色已套用）
+- [x] **旗艦版視覺**：設計語彙是「台灣道路指示牌 × 清潔隊垃圾車」
+      - 市民端：綠色路牌顯示最近垃圾桶的方向箭頭、距離、步行時間、填滿程度；快滿時推薦下一個
+      - 市府端：深色戰情室，頂部即時數字、缺口熱區光暈、垃圾車沿清運路線行駛、即時回報動態、各區缺口排名
+      - 字型打包在專案內（Chiron GoRound TC、Barlow Semi Condensed），現場網路不穩也不影響
+- [ ] 換上真實地圖後再看一次視覺（我這邊的開發環境連不到地圖圖磚，只驗證過版面）
 - [ ] 地圖底圖（選做）：改用國土測繪中心通用版電子地圖，比較有市政感
 - [ ] 部署前端（設定檔已備好，二選一）：
       - **GitHub Pages**：`.github/workflows/deploy.yml`，Settings → Pages → Source 選 GitHub Actions。⚠️ private repo 需要 GitHub Pro 才能用 Pages
@@ -61,10 +65,10 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ### Swimming
 - [ ] 熟悉 `apps/web/src/views/CitizenView.vue`
-- [x] 回報防重複點擊、送出中狀態、已回報打勾（已完成，可在此基礎上改）
-- [x] 手機版地圖自動把定位點推到清單面板上方
-- [ ] 市民端手機版 UI 美化：清單卡片、按鈕、地圖標記樣式
-- [ ] 定位失敗時的提示文案與引導
+- [x] 市民端旗艦版已完成（路牌、回報、附近清單、快滿推薦）
+- [ ] 用自己的手機實測：定位、單手操作、按鈕大小
+- [ ] 定位失敗時的引導（目前會退回台北車站示範並提示）
+- [ ] 「這附近都找不到垃圾桶」的回報可以讓使用者在地圖上點選位置（選做）
 - [ ] 「這裡需要一個」可以讓使用者在地圖上點選位置（選做）
 
 ---
@@ -103,7 +107,9 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ## 4. 資料（青）
 
-流程與格式見 [`data/README.md`](data/README.md)。原始檔放 `data/raw/`（不進版控），轉成 `data/interim/demand_points.csv`，再跑 `npm run data:build`。
+流程與格式見 [`data/README.md`](data/README.md)。
+
+> 沒有真實資料也能 Demo：目前預設使用 `data/mock/` 的全市模擬資料，畫面會標示「模擬資料」。真實資料拿到多少就換多少（例如先只換垃圾桶位置）。原始檔放 `data/raw/`（不進版控），轉成 `data/interim/demand_points.csv`，再跑 `npm run data:build`。
 
 - [ ] 下載[行人專用清潔箱位置](https://data.gov.tw/dataset/121355)，存成 `data/raw/bins.csv`
 - [ ] 捷運分時進出量 → `source=mrt`
@@ -148,5 +154,5 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ## 已知問題
 
-- [ ] 目前所有資料都是 `data/sample/` 的樣本（台北車站到西門一帶 12 個垃圾桶）
+- [ ] 目前是 `data/mock/` 的全市模擬資料（800 個垃圾桶），拿到真實資料後放進 `data/raw/` 重跑 `npm run data:build`
 - [ ] 簡報有兩份：線上 Slides 與 `docs/slides/`，內容修改不會自動同步

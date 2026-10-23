@@ -44,6 +44,14 @@ function uid(): string {
 export const loadBins = () => getJson<Bin[]>('bins.json')
 export const loadGrid = () => getJson<GridData>('grid.json')
 
+export interface DataMeta {
+  bins?: { kind: 'mock' | 'real'; source: string }
+  demand?: { kind: 'mock' | 'real'; source: string }
+}
+/** 前端顯示「模擬資料」標記用；讀不到就當作模擬，寧可多標示 */
+export const loadMeta = () => getJson<DataMeta>('meta.json').catch((): DataMeta => ({}))
+export const isMock = (m: DataMeta) => m.bins?.kind !== 'real' || m.demand?.kind !== 'real'
+
 function readLocal(): Report[] {
   try {
     return JSON.parse(localStorage.getItem(LOCAL_KEY) ?? '[]') as Report[]

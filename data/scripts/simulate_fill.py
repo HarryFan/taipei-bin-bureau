@@ -17,7 +17,7 @@ def main() -> None:
     rng = random.Random(SEED)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     levels = [
-        {"id": b["id"], "fill": round(min(1.0, rng.betavariate(3.0, 1.4)), 2), "updatedAt": now}
+        {"id": b["id"], "fill": round(min(1.0, rng.betavariate(2.4, 2.6)), 2), "updatedAt": now}
         for b in json.loads(BINS.read_text(encoding="utf-8"))
     ]
     OUT.write_text(json.dumps(levels, ensure_ascii=False, indent=1), encoding="utf-8")

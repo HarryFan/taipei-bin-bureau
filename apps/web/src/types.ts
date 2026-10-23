@@ -47,3 +47,22 @@ export const REPORT_LABEL: Record<ReportKind, string> = {
   missing: '不見了',
   need: '這裡需要一個',
 }
+
+export const REPORT_COLOR: Record<ReportKind, string> = {
+  full: '#e5484d',
+  missing: '#9aa9a1',
+  need: '#ffc72c',
+}
+
+export type FillState = 'ok' | 'busy' | 'full'
+
+/** 填滿程度分三級；顏色之外一定搭配文字，不只靠顏色辨識 */
+export function fillState(fill: number): FillState {
+  return fill >= 0.8 ? 'full' : fill >= 0.5 ? 'busy' : 'ok'
+}
+
+export const FILL_META: Record<FillState, { label: string; color: string }> = {
+  ok: { label: '還有空間', color: '#0b5d3b' },
+  busy: { label: '半滿', color: '#c79400' },
+  full: { label: '快滿了', color: '#e5484d' },
+}
