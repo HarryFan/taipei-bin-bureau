@@ -32,6 +32,7 @@ import {
   type Dispatch,
 } from '../lib/dispatch'
 import { progressOf } from '../lib/tracking'
+import { buildCases, districtScores, FAST_MIN } from '../lib/scoreboard'
 import { FILL_META, fillState, REPORT_COLOR, REPORT_LABEL, type Bin, type FillLevel, type GridCell, type GridData, type Report } from '../types'
 
 type Mode = 'gap' | 'route'
@@ -287,6 +288,12 @@ const cases = computed(() => {
     else map.set(key, { key, latest: r, count: 1 })
   }
   return [...map.values()]
+})
+
+/** 各區處理時效（和公開成績單同一套算法） */
+const scoreByDistrict = computed(() => {
+  const all = buildCases(reports.value, dispatches.value, binById.value)
+  return new Map(districtScores(all, reports.value, binById.value, DISTRICTS).map((s) => [s.district, s]))
 })
 
 function districtOfReport(r: Report) {
@@ -627,6 +634,7 @@ onBeforeUnmount(() => {
         </span>
         <time class="num text-lg text-night-mute">{{ now.toLocaleTimeString('zh-TW', { hour12: false }) }}</time>
         <RouterLink :to="{ path: '/3d', query: district ? { d: district } : {} }" class="rounded-full border border-truck/60 px-3 py-1.5 text-xs font-bold text-truck hover:bg-white/10" title="切換到立體城市視角，看清運路線與缺口">3D 城市戰情室</RouterLink>
+        <RouterLink to="/status" class="rounded-full border border-night-line px-3 py-1.5 text-xs font-bold hover:bg-white/10" title="公開的各區處理成績單">成績單</RouterLink>
         <RouterLink to="/qr" class="rounded-full border border-night-line px-3 py-1.5 text-xs font-bold hover:bg-white/10">列印 QR</RouterLink>
         <RouterLink to="/" class="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-sign-deep hover:bg-sign-soft">市民端</RouterLink>
       </div>
@@ -739,10 +747,15 @@ onBeforeUnmount(() => {
                   </span>
                   <span class="num w-8 shrink-0 text-right text-sm text-alert-ink">{{ dueByDistrict.get(d) ?? 0 }}</span>
                   <span class="w-12 shrink-0 text-right text-xs" :class="onDutyByDistrict.get(d) ? 'text-ok' : 'text-night-mute'">{{ onDutyByDistrict.get(d) ? `${onDutyByDistrict.get(d)} 車出勤` : '待命' }}</span>
+                  <span
+                    class="num w-12 shrink-0 text-right text-xs"
+                    :class="scoreByDistrict.get(d)?.fast ? 'font-bold text-ok' : 'text-night-mute'"
+                    :title="`平均處理時間；${FAST_MIN} 分鐘內有時效勳章`"
+                  >{{ scoreByDistrict.get(d)?.avgMin !== undefined ? `${scoreByDistrict.get(d)!.fast ? '✓ ' : ''}${scoreByDistrict.get(d)!.avgMin}分` : '—' }}</span>
                 </button>
               </li>
             </ul>
-            <p class="mt-3 text-xs text-night-mute">北投區在開放資料沒有點位，暫不列入。</p>
+            <p class="mt-3 text-xs text-night-mute">北投區在開放資料沒有點位，暫不列入。最右欄是平均處理時間，公開在 <RouterLink to="/status" class="underline">處理成績單</RouterLink>。</p>
           </template>
 
           <!-- 單一區：排路線、派車、記錄返隊時間 -->

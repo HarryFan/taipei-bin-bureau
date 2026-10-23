@@ -91,6 +91,9 @@ const alternative = computed(() =>
     ? ranked.value.find((r) => r.bin.id !== target.value?.bin.id && fillState(fillOf(r.bin.id)) !== 'full')
     : undefined,
 )
+/** 最近的垃圾桶太遠（鏟屎特工隊的做法）：直接請市民回報這裡需要一個 */
+const FAR_M = 300
+const tooFar = computed(() => !scanValid.value && !!ranked.value[0] && ranked.value[0].meters > FAR_M)
 const nearby = computed(() => ranked.value.filter((r) => r.bin.id !== target.value?.bin.id).slice(0, 5))
 const isScanned = (bin?: Bin) => !!bin && scanValid.value === true && scannedId.value === bin.id
 const isStale = (id: string) => (checkedDays.value.get(id) ?? 0) >= STALE_DAYS
@@ -410,6 +413,15 @@ onBeforeUnmount(() => {
         </div>
         <p v-else class="mb-2 text-xs text-mute">{{ locateText }}<span v-if="mock" class="sm:hidden">，目前顯示模擬資料</span></p>
 
+        <!-- 最近的垃圾桶太遠：一鍵回報這裡需要垃圾桶 -->
+        <div v-if="tooFar && !reported.has(keyOf('need'))" class="mb-3 flex items-center gap-3 rounded-[12px] border-2 border-dashed border-truck bg-[#fff8e1] px-3 py-2.5">
+          <p class="min-w-0 flex-1 text-sm leading-snug">
+            最近的垃圾桶在 <span class="num font-bold">{{ Math.round(ranked[0].meters) }}</span> 公尺外。<br />
+            <span class="text-xs text-mute">太遠了？回報這裡需要一個，會變成缺口熱區的證據。</span>
+          </p>
+          <button class="shrink-0 rounded-[10px] bg-truck px-3 py-2 text-sm font-bold text-ink" :disabled="!!sending" @click="report('need')">太遠了</button>
+        </div>
+
         <!-- 路牌：最重要的資訊 -->
         <div v-if="target" class="rounded-[16px] bg-sign p-[5px] text-white shadow-lg shadow-sign/25">
           <div class="rounded-[12px] border-2 border-white/90 px-4 pt-3.5 pb-3">
@@ -429,7 +441,7 @@ onBeforeUnmount(() => {
                 <p v-if="target.meters < 15" class="mt-1 text-[28px] leading-tight font-bold">就在你旁邊</p>
                 <p v-else class="mt-0.5 flex items-baseline gap-1.5">
                   <span class="num text-[44px] leading-none font-bold">{{ Math.round(target.meters) }}</span>
-                  <span class="text-sm">公尺</span>
+                  <span class="text-sm whitespace-nowrap">公尺</span>
                   <span class="ml-1 text-sm text-white/85">步行 {{ walkingMinutes(target.meters) }} 分鐘，往{{ compassWord(bearing) }}</span>
                 </p>
               </div>
@@ -570,6 +582,7 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M4 11v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5" /></svg>
             分享：我為台北做了一件小事
           </button>
+          <RouterLink to="/status" class="mt-2 block text-center text-xs text-sign underline underline-offset-2">看各區處理成績單</RouterLink>
         </div>
 
         <!-- 巡桶任務：帶大家去資料最缺的地方 -->

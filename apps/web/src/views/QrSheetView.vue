@@ -78,7 +78,7 @@ onMounted(async () => {
             <p class="mt-2 text-sm leading-snug">{{ s.bin.road }}</p>
             <p class="mt-auto pt-2 text-xs leading-snug text-white/85">
               <template v-if="s.fake">示範：被替換的假貼紙，掃描會顯示驗證失敗</template>
-              <template v-else>掃描回報這桶的狀況。掃開的頁面編號應與上方相同，且不會要求登入。</template>
+              <template v-else>掃描或手機靠近（NFC）回報這桶的狀況。打開的頁面編號應與上方相同，且不會要求登入。</template>
             </p>
             <p class="num mt-1 text-[11px] text-white/70">{{ host }}</p>
           </div>
