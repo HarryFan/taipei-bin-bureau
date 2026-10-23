@@ -8,7 +8,7 @@
 
 ```
 apps/web    Vue 3 + Vite + TS + Tailwind + Leaflet（市民端 / 、市府端 /admin）
-apps/api    選配的小 API（市民回報、模擬填滿率），零相依
+apps/api    暫用的 Node 小 API，正式版由 Pamis 以 ASP.NET Core 實作（端點相同）
 data        Python 資料管線，輸出到 apps/web/public/data
 ```
 
@@ -30,8 +30,8 @@ npm run api          # 選配，啟動後在 apps/web/.env 設定 VITE_API_URL
 | Harry | 前端主架構與視覺、地圖元件 |
 | Swimming | 市民端手機頁面 |
 | 青 Ian | 需求分數與缺口模型、陳情資料 |
-| Pamis | 資料 ETL、回報 API |
-| Vicky | 模擬填滿率、清運路線 |
+| Pamis | 後端主力：ASP.NET Core API、回報 API、部署 |
+| Vicky | 協助後端：填滿率模擬、清運路線 |
 | Kyra | PM、README、Demo 腳本 |
 
 ## 資料來源
