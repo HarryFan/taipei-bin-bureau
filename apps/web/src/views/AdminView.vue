@@ -645,11 +645,14 @@ onBeforeUnmount(() => {
       <button
         v-for="d in ['', ...DISTRICTS]"
         :key="d || 'all'"
-        class="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition"
-        :class="[
-          district === d ? 'border-truck bg-truck font-bold text-ink' : 'border-night-line bg-white hover:bg-night-2',
-          d && !binCountByDistrict.get(d) ? 'opacity-45' : '',
-        ]"
+        class="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sign"
+        :class="
+          district === d
+            ? 'border-truck bg-truck font-bold text-ink'
+            : d && !binCountByDistrict.get(d)
+              ? 'cursor-not-allowed border-dashed border-mute/50 bg-transparent text-mute'
+              : 'border-sign-soft bg-sign-soft font-medium text-sign-deep hover:border-sign/40 hover:bg-[#c6dccf]'
+        "
         :aria-pressed="district === d"
         :disabled="!!d && !binCountByDistrict.get(d)"
         :title="d && !binCountByDistrict.get(d) ? '開放資料沒有這一區的點位' : ''"
@@ -659,7 +662,7 @@ onBeforeUnmount(() => {
         <span
           v-if="d ? dueByDistrict.get(d) : fullBins.length && !district"
           class="num rounded-full px-1.5 text-xs leading-5"
-          :class="district === d ? 'bg-ink/15' : 'bg-alert/90 text-white'"
+          :class="district === d ? 'bg-ink/15' : 'bg-alert-ink text-white'"
           :title="'待清運'"
         >{{ d ? dueByDistrict.get(d) : bins.filter(isDue).length }}</span>
         <span v-if="d && onDutyByDistrict.get(d)" class="h-2 w-2 rounded-full bg-ok" title="有車出勤中" />
