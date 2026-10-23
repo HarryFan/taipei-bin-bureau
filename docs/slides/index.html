@@ -26,18 +26,18 @@
 <div id="stage">
 <section id="cover" data-transition="fade" style="background:#14302A;color:#F6F4EE;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:space-between">
 <div style="position:absolute;left:1120px;top:128px;width:672px;height:824px;background:#1D4038;border-radius:32px"></div>
-<p style="position:absolute;left:1184px;top:200px;width:560px;font-size:32px;color:#9FC2B8">台北行人專用垃圾桶</p>
-<p style="position:absolute;left:1184px;top:270px;width:560px;font-size:120px;font-weight:900;line-height:1.1;color:#F6F4EE">近 3,000</p>
-<p style="position:absolute;left:1184px;top:450px;width:560px;font-size:44px;color:#E8833A">↓ 縮減到</p>
-<p style="position:absolute;left:1184px;top:530px;width:560px;font-size:120px;font-weight:900;line-height:1.1;color:#E8833A">約 800 組</p>
-<p style="position:absolute;left:1184px;top:760px;width:560px;font-size:24px;color:#9FC2B8;line-height:1.4">資料來源：市政 debug松官網題目說明</p>
+<p style="position:absolute;left:1184px;top:200px;width:560px;font-size:32px;color:#9FC2B8">台北行人垃圾桶，2018 年 7 月</p>
+<p style="position:absolute;left:1184px;top:270px;width:560px;font-size:120px;font-weight:900;line-height:1.1;color:#F6F4EE">2,004 處</p>
+<p style="position:absolute;left:1184px;top:450px;width:560px;font-size:44px;color:#E8833A">↓ 2026 年 6 月</p>
+<p style="position:absolute;left:1184px;top:530px;width:560px;font-size:120px;font-weight:900;line-height:1.1;color:#E8833A">806 組</p>
+<p style="position:absolute;left:1184px;top:740px;width:560px;font-size:24px;color:#9FC2B8;line-height:1.4">換裝後 1 處約等於 1 組（一般＋回收兩座），約剩四成。來源：議會公報、環保局新聞稿</p>
 <p style="font-size:32px;font-weight:700;color:#E8833A;letter-spacing:2px">洋流黑客松｜市政 Debug 松・題目 #2</p>
 <div style="display:flex;flex-direction:column;gap:24px;width:900px">
 <h1 style="font-size:160px;font-weight:900;line-height:1.1;color:#F6F4EE">台北桶報局</h1>
 <p style="font-size:44px;color:#BFD8D0;line-height:1.3">找回消失的垃圾桶・團隊規劃簡報</p>
 </div>
 <p style="font-size:32px;color:#9FC2B8">同流 One Flow ・ 2026/10/23</p>
-<aside>開場：我們選的是題目 #2「找回消失的垃圾桶」。右邊的數字是官網題目說明裡的縮減幅度，上台前要跟主計處的 1,984 個統一口徑。</aside>
+<aside>開場：我們選的是題目 #2「找回消失的垃圾桶」。右邊兩個數字單位一致：2018 年 7 月 2,004 處，2026 年 6 月 806 組，約剩四成。不要講「近 3,000 減到 800」，前者是舊款單箱的設置點，單位不同。數字依據見 docs/DATA_SOURCES.md。</aside>
 </section>
 <section id="rules" data-section="規則與產品定位" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:56px">
 <div style="display:flex;flex-direction:column;gap:12px">
@@ -138,16 +138,16 @@
 </div>
 <table style="font-family:'Noto Sans TC', Arial, sans-serif;font-size:28px;color:#1F2A27;background:#FFFFFF;border:1px solid #E2DDD0;border-radius:16px">
 <tr style="background:#14302A"><th style="width:44%;color:#F6F4EE">資料</th><th style="width:36%;color:#F6F4EE">用途</th><th style="width:20%;color:#F6F4EE">類型</th></tr>
-<tr><td>行人專用清潔箱（位置）</td><td>現有供給</td><td>真實</td></tr>
-<tr style="background:#FAF8F3"><td>捷運各站分時進出量</td><td>人流需求</td><td>真實</td></tr>
+<tr><td>行人專用清潔箱（121355）</td><td>現有供給，661 點位</td><td>真實</td></tr>
+<tr style="background:#FAF8F3"><td>捷運人流與出入口</td><td>人流需求</td><td>真實</td></tr>
 <tr><td>公車站牌位置</td><td>人流需求</td><td>真實</td></tr>
-<tr style="background:#FAF8F3"><td>陳情系統類別資料</td><td>通報熱點</td><td>真實</td></tr>
+<tr style="background:#FAF8F3"><td>陳情系統類別資料</td><td>陳情趨勢（無地點）</td><td>真實</td></tr>
 <tr><td>市長你給我聽好了資料集</td><td>Demo 開場的民眾抱怨</td><td>真實・去識別化</td></tr>
 <tr style="background:#FAF8F3"><td style="color:#C4621F">填滿率、市民回報</td><td style="color:#C4621F">滿溢偵測、回饋迴圈</td><td style="color:#C4621F">模擬</td></tr>
 </table>
-<p style="font-size:24px;color:#4A5A55;line-height:1.5">口徑提醒：官網寫「約 800 組」，主計處統計 2023 年 6 月底為 1,984 個。上台前統一引用哪一個。</p>
+<p style="font-size:24px;color:#4A5A55;line-height:1.5">單位提醒：開放資料是點位（661 筆，北投 0 筆），官方總數是組（806 組）。點位不能加總成組數，數字一律寫單位和年份。</p>
 <p style="position:absolute;right:128px;bottom:64px;width:200px;font-size:24px;color:#7A8783;text-align:right">05</p>
-<aside>「市長你給我聽好了」資料集放在 repo 的 data/private，已經 gitignore，不要丟進外部 AI 服務。</aside>
+<aside>「市長你給我聽好了」資料集放在 repo 的 data/private，已經 gitignore，不要丟進外部 AI 服務。陳情系統資料沒有地點，只能看趨勢。完整說明見 docs/DATA_SOURCES.md。</aside>
 </section>
 <section id="team" data-transition="fade" style="background:#F6F4EE;color:#1F2A27;font-family:'Noto Sans TC', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
 <div style="display:flex;flex-direction:column;gap:12px">
@@ -402,10 +402,10 @@
        .from(footer, { autoAlpha: 0, duration: 0.5 }, '-=0.3')
        .from(panel, { x: 120, autoAlpha: 0, duration: 0.8, ease: 'expo.out' }, 0.3)
        .from([label, big1], { y: 30, autoAlpha: 0, stagger: 0.1, duration: 0.5 }, 0.7)
-       .add(count(big1, 0, 3000, { duration: 1.1 }), 0.8)
+       .add(count(big1, 0, 2004, { duration: 1.1 }), 0.8)
        .from(arrow, { y: -20, autoAlpha: 0, duration: 0.4 }, 1.8)
        .from(big2, { autoAlpha: 0, scale: 1.15, duration: 0.5, ease: 'back.out(2)' }, 2.0)
-       .add(count(big2, 3000, 800, { duration: 1.3 }), 2.0)
+       .add(count(big2, 2004, 806, { duration: 1.3 }), 2.0)
        .from(src, { autoAlpha: 0, duration: 0.4 }, 2.6);
       return true;
     },

@@ -50,6 +50,21 @@ export interface DataMeta {
 }
 /** 前端顯示「模擬資料」標記用；讀不到就當作模擬，寧可多標示 */
 export const loadMeta = () => getJson<DataMeta>('meta.json').catch((): DataMeta => ({}))
+export interface OfficialCount {
+  date: string
+  count: number
+  unit: string
+  boxes?: number
+  source: string
+}
+export interface OfficialCounts {
+  current: OfficialCount
+  history: OfficialCount[]
+  openData: { date: string; records: number; unit: string; missingDistricts: string[]; source: string }
+}
+/** 官方公布的數量（含單位），畫面上的「官方統計」只能從這裡來 */
+export const loadOfficial = () => getJson<OfficialCounts>('official_counts.json').catch(() => undefined)
+
 export const isMock = (m: DataMeta) => m.bins?.kind !== 'real' || m.demand?.kind !== 'real'
 
 function readLocal(): Report[] {

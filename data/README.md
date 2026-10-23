@@ -1,5 +1,7 @@
 # 資料管線
 
+> 資料來源、單位與限制請先讀 [`docs/DATA_SOURCES.md`](../docs/DATA_SOURCES.md)。
+
 流程：**原始資料 → 統一格式 → 模型 → 前端 JSON**
 
 ```

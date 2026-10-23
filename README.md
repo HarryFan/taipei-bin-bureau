@@ -6,6 +6,8 @@
 
 工作清單與分工進度見 [TODO.md](TODO.md)。
 
+**資料來源、數字單位與資料驅動的開發需求見 [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)，動工前請先讀第 0 節。**
+
 ## 結構
 
 ```
@@ -43,7 +45,9 @@ npm run slides       # 團隊簡報 http://localhost:4321（← → 翻頁、F �
 
 | 資料 | 類型 |
 | --- | --- |
-| [臺北市行人專用清潔箱（位置）](https://data.gov.tw/dataset/121355) | 真實開放資料 |
+| [臺北市行人專用清潔箱（121355）](https://data.gov.tw/dataset/121355) | 真實開放資料（點位，尚未取得最新版） |
+| [臺北市環境衛生管理概況（145763）](https://data.gov.tw/dataset/145763) | 真實開放資料（官方年度數量） |
+| `apps/web/public/data/official_counts.json` | 官方數量摘錄，引自 [臺北行人專用清潔箱數量整理](https://data.bin.ianwu.net/) |
 | [臺北捷運各站分時進出量](https://data.taipei/dataset/detail?id=63f31c7e-7fc3-418b-bd82-b95158755b4d) | 真實開放資料 |
 | [臺北市公車站牌位置圖](https://data.taipei/dataset/detail?id=48aa5bca-2a4f-4fb7-a658-43cba51d5d56) | 真實開放資料 |
 | [臺北市陳情系統類別資料](https://data.taipei/dataset/detail?id=cb423c17-88eb-4231-a725-f1b93247d1bf) | 真實開放資料 |

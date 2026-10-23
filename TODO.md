@@ -45,6 +45,8 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ## 2. 前端（Harry 主架構、Swimming 市民端）
 
+> 前端依 `docs/DATA_SOURCES.md` 第 3.2 節：數字標單位、缺資料與沒有垃圾桶分開、新設點寫成候選。已完成前三項，剩資料來源標示與會勘佐證視角。
+
 ### Harry
 - [ ] 跑通 `npm install` / `dev` / `build`（見第 0 節）
 - [x] **儀表板即時更新**：每 3 秒輪詢；新回報會跳通知、地圖標記閃爍、自動移到該位置，回報「滿了」時自動切到清運分頁
@@ -90,6 +92,8 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 - 被回報 `full` 的 `binId`，在 `/api/fill-levels` 要變成 `fill: 1`
 - CORS 開放前端的部署網域與 `http://localhost:5173`
 
+> 動工前先讀 `docs/DATA_SOURCES.md` 第 3.3 節：回報要能依區、網格彙總，並匯出給現場會勘；填滿率回應要帶 `simulated: true`。
+
 ### Pamis
 - [ ] 建立 `apps/api-dotnet`（ASP.NET Core Minimal API）
 - [ ] 實作上面四個端點（資料先存記憶體即可）
@@ -107,7 +111,7 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ## 4. 資料（青）
 
-流程與格式見 [`data/README.md`](data/README.md)。
+流程與格式見 [`data/README.md`](data/README.md)，**每份資料的來源、單位、限制與下載指令見 [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md)**。
 
 > 沒有真實資料也能 Demo：目前預設使用 `data/mock/` 的全市模擬資料，畫面會標示「模擬資料」。真實資料拿到多少就換多少（例如先只換垃圾桶位置）。原始檔放 `data/raw/`（不進版控），轉成 `data/interim/demand_points.csv`，再跑 `npm run data:build`。
 
@@ -118,6 +122,9 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 - [ ] 陳情系統類別資料 → 篩出垃圾、環境清潔相關 → `source=complaint`
 - [ ] 商圈／夜市座標 → `source=market`（可手動標註幾個）
 - [ ] 調整 `build_grid.py` 的權重與網格大小，確認建議新設點合理
+- [ ] 下載 145763 主計處年度數量，補齊 `official_counts.json` 的歷年資料
+- [ ] 捷運出入口用 ArcGIS 查詢（指令在 DATA_SOURCES.md 第 4 節）
+- [ ] **取得行政區界，遮掉資料缺漏的北投區**（不然北投的需求會被算到士林）
 - [ ] 從「市長你給我聽好了」資料集找出 2–3 則垃圾桶相關抱怨，給 Demo 開場用
       ⚠️ 資料放 `data/private/`（已 gitignore），**不要丟進外部 AI 服務**，用關鍵字篩選即可
 
@@ -130,6 +137,8 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 - [ ] README 資料來源表確認：哪些真實、哪些模擬
 - [ ] README 補上每個人用到的 AI 工具與開源套件
 - [ ] 2 分鐘 Demo 講稿（結構見簡報第 11 頁）
+- [ ] 講稿的數字照 `docs/DATA_SOURCES.md` 第 0 節：2018 年 7 月 2,004 處 → 2026 年 6 月 806 組，不要講「近 3,000 減到 800」
+- [ ] 100 天落地計畫參考 DATA_SOURCES.md 第 1 節「會勘須里長同意、行人沒有代表」，我們的回報就是行人的聲音
 - [ ] 票選拉票文案（10/24 16:30 開放，10/31 18:00 截止）
 - [ ] 時程控管：10/24 12:00 看 Demo 名單、15:00 凍結功能
 

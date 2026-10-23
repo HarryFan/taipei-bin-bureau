@@ -11,6 +11,8 @@ import {
   loadFillLevels,
   loadGrid,
   loadMeta,
+  loadOfficial,
+  type OfficialCounts,
   loadReports,
   onLocalReportsChange,
   type DataSource,
@@ -34,6 +36,7 @@ const reports = ref<Report[]>([])
 const threshold = ref(0.8)
 const source = ref<DataSource>(lastSource)
 const mock = ref(true)
+const official = ref<OfficialCounts>()
 const now = ref(new Date())
 const freshIds = ref(new Set<string>())
 const confirmReset = ref(false)
@@ -82,15 +85,26 @@ const suggestions = computed(() => {
     })
 })
 
+const DISTRICTS = ['中正區', '大同區', '中山區', '松山區', '大安區', '萬華區', '信義區', '士林區', '北投區', '內湖區', '南港區', '文山區']
+
+/**
+ * 各區缺口。資料裡某區 0 個點位時視為「資料缺漏」，不排名：
+ * 開放資料 121355 的北投區就是 0 筆，不能解讀成北投最缺垃圾桶
+ */
 const districtGaps = computed(() => {
+  const binCount = new Map<string, number>()
+  for (const b of bins.value) binCount.set(b.district, (binCount.get(b.district) ?? 0) + 1)
   const sum = new Map<string, number>()
   for (const c of gapCells.value) {
     const d = nearestBin(c.lat, c.lng)?.district
     if (d) sum.set(d, (sum.get(d) ?? 0) + c.gap)
   }
-  const rows = [...sum.entries()].map(([district, gap]) => ({ district, gap })).sort((a, b) => b.gap - a.gap)
-  const max = Math.max(0.0001, ...rows.map((r) => r.gap))
-  return rows.map((r) => ({ ...r, share: r.gap / max }))
+  const ranked = DISTRICTS.filter((d) => (binCount.get(d) ?? 0) > 0)
+    .map((district) => ({ district, gap: sum.get(district) ?? 0, missing: false }))
+    .sort((a, b) => b.gap - a.gap)
+  const max = Math.max(0.0001, ...ranked.map((r) => r.gap))
+  const missing = DISTRICTS.filter((d) => !binCount.get(d)).map((district) => ({ district, gap: 0, missing: true }))
+  return [...ranked, ...missing].map((r) => ({ ...r, share: r.gap / max }))
 })
 
 const fullBins = computed(() => bins.value.filter((b) => (fillById.value.get(b.id) ?? 0) >= threshold.value))
@@ -107,7 +121,7 @@ const todayReports = computed(() => {
 // ---------- 頂部數字：GSAP 數字滾動 ----------
 const shown = reactive({ bins: 0, pickup: 0, gaps: 0, reports: 0 })
 const targets = computed(() => ({
-  bins: bins.value.length,
+  bins: official.value?.current.count ?? 0,
   pickup: fullBins.value.length,
   gaps: gapCells.value.length,
   reports: todayReports.value.length,
@@ -184,7 +198,7 @@ function drawOverlay() {
           html: `<div style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:#ffc72c;color:#10251c;font:700 15px var(--font-num);box-shadow:0 0 0 3px rgb(11 26 20 / .9),0 0 22px rgb(255 199 44 / .55)">${i + 1}</div>`,
         }),
       })
-        .bindTooltip(`建議新設 #${i + 1}：${s.place}`)
+        .bindTooltip(`候選新設點 #${i + 1}：${s.place}`)
         .addTo(overlayLayer!)
     })
     return
@@ -315,7 +329,8 @@ watch([reports, freshIds], drawReports)
 
 onMounted(async () => {
   map.value = createMap(mapEl.value!, { theme: 'dark', zoom: 13, center: [25.05, 121.545] })
-  const [b, g, meta] = await Promise.all([loadBins(), loadGrid(), loadMeta()])
+  const [b, g, meta, off] = await Promise.all([loadBins(), loadGrid(), loadMeta(), loadOfficial()])
+  official.value = off
   mock.value = isMock(meta)
   bins.value = b
   grid.value = g
@@ -349,8 +364,8 @@ onBeforeUnmount(() => {
 
       <dl class="order-3 flex w-full gap-6 overflow-x-auto lg:order-none lg:w-auto lg:flex-1 lg:justify-center lg:gap-10">
         <div class="shrink-0">
-          <dt class="text-xs text-night-mute">行人垃圾桶</dt>
-          <dd class="num text-[30px] leading-tight font-semibold">{{ shown.bins.toLocaleString() }}</dd>
+          <dt class="text-xs text-night-mute" :title="official?.current.source">官方統計{{ official ? `（${official.current.date.replace('-', '/')}）` : '' }}</dt>
+          <dd class="num text-[30px] leading-tight font-semibold">{{ shown.bins.toLocaleString() }}<span class="ml-1 font-sans text-sm font-normal text-night-mute">{{ official?.current.unit }}</span></dd>
         </div>
         <div class="shrink-0">
           <dt class="text-xs text-night-mute">待清運</dt>
@@ -400,21 +415,22 @@ onBeforeUnmount(() => {
         <div class="p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           <template v-if="mode === 'gap'">
             <h2 class="text-base font-bold">哪裡最缺垃圾桶</h2>
-            <p class="mt-1 text-sm leading-relaxed text-night-mute">人流和陳情多、垃圾桶少的地方。每格 {{ grid?.cellMeters ?? 250 }} 公尺見方。</p>
+            <p class="mt-1 text-sm leading-relaxed text-night-mute">人流和陳情多、垃圾桶少的地方。每格 {{ grid?.cellMeters ?? 250 }} 公尺見方，地圖上共 {{ bins.length }} 個垃圾桶點位。</p>
             <div class="mt-3 flex items-center gap-2 text-xs text-night-mute">
               <span>缺口小</span>
               <span class="h-2 flex-1 rounded-full bg-gradient-to-r from-[#ffc72c] via-[#ff8a2a] to-[#e5484d]" />
               <span>缺口大</span>
             </div>
 
-            <h3 class="mt-6 mb-2 text-sm font-bold">建議新設點</h3>
+            <h3 class="mt-6 text-sm font-bold">候選新設點</h3>
+            <p class="mb-2 text-xs leading-relaxed text-night-mute">實際設置仍要符合設置原則，並經現場會勘。</p>
             <ol>
               <li v-for="(s, i) in suggestions" :key="s.cell.id">
                 <button class="group flex w-full items-center gap-3 border-t border-night-line py-2.5 text-left first:border-t-0" @click="flyTo(s.cell.lat, s.cell.lng)">
                   <span class="num grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-truck text-[15px] font-bold text-ink">{{ i + 1 }}</span>
                   <span class="min-w-0 flex-1">
                     <span class="block truncate text-sm group-hover:text-truck">{{ s.place }}</span>
-                    <span class="block text-xs text-night-mute">{{ s.district }}<template v-if="s.cell.supply === 0">，這一格沒有垃圾桶</template><template v-else>，這一格只有 {{ s.cell.supply }} 個</template></span>
+                    <span class="block text-xs text-night-mute">{{ s.district }}<template v-if="s.cell.supply === 0">，這一格沒有垃圾桶點位</template><template v-else>，這一格只有 {{ s.cell.supply }} 個點位</template></span>
                   </span>
                   <span class="num shrink-0 text-right text-sm text-[#ffb27a]" :title="'缺口分數'">{{ s.cell.gap.toFixed(2) }}</span>
                 </button>
@@ -494,7 +510,8 @@ onBeforeUnmount(() => {
           <ul class="mt-3 space-y-1.5">
             <li v-for="d in districtGaps" :key="d.district" class="grid grid-cols-[3.5rem_1fr] items-center gap-2 text-sm">
               <span class="text-night-mute">{{ d.district }}</span>
-              <span class="block h-2.5 rounded-r-full bg-night-2">
+              <span v-if="d.missing" class="text-xs text-night-mute">資料缺漏，不列入排名</span>
+              <span v-else class="block h-2.5 rounded-r-full bg-night-2">
                 <span class="block h-full rounded-r-full bg-truck/85" :style="{ width: `${d.share * 100}%` }" />
               </span>
             </li>

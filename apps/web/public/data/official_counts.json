@@ -1,0 +1,12 @@
+{
+  "note": "官方公布的行人專用清潔箱數量。單位不同不可直接相除，詳見 docs/DATA_SOURCES.md 第 0 節。",
+  "compiledFrom": "https://data.bin.ianwu.net/",
+  "current": { "date": "2026-06", "count": 806, "unit": "組", "boxes": 1612, "source": "臺北市政府環境保護局新聞稿 2026-08-10" },
+  "history": [
+    { "date": "2008-12", "count": 3484, "unit": "設置點", "source": "主計處 TSIS" },
+    { "date": "2018-07", "count": 2004, "unit": "處", "boxes": 4008, "source": "臺北市議會公報第 112 卷第 10 期" },
+    { "date": "2023-06", "count": 1984, "unit": "個（約等於組）", "source": "臺北市政府主計處市政統計週報第 1246 號" },
+    { "date": "2026-06", "count": 806, "unit": "組", "boxes": 1612, "source": "臺北市政府環境保護局新聞稿 2026-08-10" }
+  ],
+  "openData": { "date": "2026-10-21", "records": 661, "unit": "點位", "missingDistricts": ["北投區"], "source": "政府資料開放平臺 121355" }
+}

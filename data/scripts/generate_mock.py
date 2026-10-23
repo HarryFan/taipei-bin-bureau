@@ -1,7 +1,7 @@
 """【模擬資料】產生全台北市規模的垃圾桶與需求點，讓 Demo 在拿到真實資料前就能跑。
 
 輸出：
-  data/mock/bins.mock.csv           約 800 個行人專用垃圾桶（欄位同環保局開放資料）
+  data/mock/bins.mock.csv           661 個垃圾桶點位（筆數與欄位同環保局開放資料 121355）
   data/mock/demand_points.mock.csv  捷運、公車、陳情、商圈四類需求點
 
 注意：
@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "mock"
 SEED = 20261023
-TARGET_BINS = 800
+TARGET_BINS = 661  # 對齊開放資料 121355（2026-10-21 版）的點位筆數
 
 # 行政區約略中心（用來替模擬點標上行政區）
 DISTRICTS = {
