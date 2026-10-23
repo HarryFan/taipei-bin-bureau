@@ -28,6 +28,9 @@ WEIGHTS = {"mrt": 0.4, "complaint": 0.3, "bus": 0.2, "market": 0.1}
 SUPPLY_PER_BIN = 0.25
 TOP_N = 10
 
+sys.path.insert(0, str(Path(__file__).parent))
+from areas import missing_area  # noqa: E402
+
 
 def cell_key(lat: float, lng: float) -> tuple[int, int]:
     return math.floor(lat / LAT_STEP), math.floor(lng / LNG_STEP)
@@ -62,6 +65,7 @@ def main() -> None:
             if max_by_source[s] > 0
         )
         lat, lng = cell_center(k)
+        missing = missing_area(lat, lng) if not supply.get(k) else None
         cells.append({
             "id": f"c{k[0]}_{k[1]}",
             "lat": round(lat, 6),
@@ -69,9 +73,10 @@ def main() -> None:
             "demand": round(demand, 4),
             "supply": supply.get(k, 0),
             "gap": round(demand - SUPPLY_PER_BIN * supply.get(k, 0), 4),
+            **({"missingData": True} if missing else {}),
         })
 
-    suggestions = [c["id"] for c in sorted(cells, key=lambda c: -c["gap"]) if c["gap"] > 0][:TOP_N]
+    suggestions = [c["id"] for c in sorted(cells, key=lambda c: -c["gap"]) if c["gap"] > 0 and not c.get("missingData")][:TOP_N]
     OUT.write_text(json.dumps({
         "cellMeters": CELL_M,
         "cellSizeDeg": {"lat": LAT_STEP, "lng": LNG_STEP},
@@ -81,7 +86,8 @@ def main() -> None:
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     from build_bins import write_meta
     write_meta("demand", "mock" if src == MOCK_POINTS else "real", src.name)
-    print(f"{src.name} → {OUT.relative_to(ROOT)}：{len(cells)} 格，建議 {len(suggestions)} 處")
+    skipped = sum(1 for c in cells if c.get("missingData"))
+    print(f"{src.name} → {OUT.relative_to(ROOT)}：{len(cells)} 格（{skipped} 格位於資料缺漏區，不列入建議），建議 {len(suggestions)} 處")
 
 
 if __name__ == "__main__":

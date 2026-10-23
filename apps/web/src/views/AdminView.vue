@@ -73,7 +73,8 @@ function nearestBin(lat: number, lng: number): Bin | undefined {
   return best
 }
 
-const gapCells = computed(() => (grid.value?.cells ?? []).filter((c) => c.gap > 0))
+// 資料缺漏區（北投）的網格不算缺口，否則會被誤判成最缺垃圾桶
+const gapCells = computed(() => (grid.value?.cells ?? []).filter((c) => c.gap > 0 && !c.missingData))
 const maxGap = computed(() => Math.max(0.0001, ...gapCells.value.map((c) => c.gap)))
 
 /** 網格沒有地名，用最近的垃圾桶位置當作地標描述 */

@@ -24,6 +24,8 @@ export interface GridCell {
   demand: number
   supply: number
   gap: number
+  /** 位於開放資料缺漏的區域（例如北投區 0 筆），缺口無法判斷 */
+  missingData?: boolean
 }
 
 export interface GridData {

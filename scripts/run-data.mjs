@@ -1,7 +1,7 @@
 // 依序執行資料管線；自動找可用的 Python（Windows 常是 py 或 python，不是 python3）
 import { spawnSync } from 'node:child_process'
 
-const STEPS = ['data/scripts/build_bins.py', 'data/scripts/build_grid.py', 'data/scripts/simulate_fill.py']
+const STEPS = ['data/scripts/build_bins.py', 'data/scripts/build_hotspots.py', 'data/scripts/build_grid.py', 'data/scripts/simulate_fill.py']
 // --mock：先重新產生模擬資料再建置
 if (process.argv.includes('--mock')) STEPS.unshift('data/scripts/generate_mock.py')
 const CANDIDATES = [['python3'], ['python'], ['py', '-3']]
