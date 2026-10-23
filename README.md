@@ -22,7 +22,7 @@
 | 後端（暫用） | Node.js 22，零相依 HTTP 伺服器 | `apps/api/server.mjs`，資料存在記憶體；API 連不上時前端自動改用瀏覽器儲存 |
 | 後端（正式） | ASP.NET Core Minimal API | 由 Pamis 實作，端點與暫用版相同，見 TODO.md |
 | 資料管線 | Python 3（只用標準庫） | 產生模擬資料、轉換開放資料、計算缺口網格，輸出靜態 JSON 到 `apps/web/public/data` |
-| 簡報 | 手寫 HTML + GSAP 3.12 | `docs/slides/`，`npm run slides` 用 Node 提供本機網址 |
+| 簡報 | 手寫 HTML + GSAP 3.12 | `docs/slides/`，`npm run slides` 用 Node 提供本機網址；3 分鐘提案版在 `/pitch.html` |
 | 部署 | Vercel（`vercel.json`）或 GitHub Pages（`.github/workflows/deploy.yml`） | 兩者都會把簡報一起放在 `<網址>/slides/` |
 | 專案管理 | npm workspaces（monorepo） | 根目錄一個 `npm install` 裝好全部 |
 
