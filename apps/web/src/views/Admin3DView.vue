@@ -146,7 +146,7 @@ function focus() {
   const c = city.value
   if (!c) return
   const pts = visibleBins.value.map((b) => [b.lat, b.lng] as LatLng)
-  c.flyToPoints(pts, district.value ? 130 : 340)
+  c.flyToPoints(pts, district.value ? 130 : 240, district.value ? 1.9 : 1.25)
 }
 
 watch([mode, fills, dispatches, trucks], syncScene)

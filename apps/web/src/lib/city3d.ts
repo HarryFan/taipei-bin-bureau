@@ -555,13 +555,13 @@ export class City3D {
   }
 
   /** 鏡頭飛到一組點的範圍 */
-  flyToPoints(points: LatLng[], minDist = 60) {
+  flyToPoints(points: LatLng[], minDist = 60, factor = 1.9) {
     if (!points.length) return
     const box = new THREE.Box3()
     for (const [lat, lng] of points) box.expandByPoint(this.project(lat, lng))
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
-    const dist = Math.max(minDist, Math.max(size.x, size.z) * 1.9)
+    const dist = Math.max(minDist, Math.max(size.x, size.z) * factor)
     const dir = this.camera.position.clone().sub(this.controls.target).normalize()
     const to = center.clone().add(dir.multiplyScalar(dist))
     this.flight = { from: this.camera.position.clone(), to, fromT: this.controls.target.clone(), toT: center, t0: performance.now(), dur: this.reduceMotion ? 1 : 1100 }
