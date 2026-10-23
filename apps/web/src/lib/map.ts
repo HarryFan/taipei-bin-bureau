@@ -38,7 +38,7 @@ function sources(theme: Theme): TileSource[] {
     {
       name: 'OpenStreetMap',
       url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      options: { maxZoom: 19, attribution: OSM_ATTR, className: theme === 'dark' ? 'tiles-dim' : '' },
+      options: { maxZoom: 19, attribution: OSM_ATTR, className: theme === 'dark' ? 'tiles-dim' : 'tiles-soft' },
     },
     {
       name: '國土測繪中心',
@@ -46,7 +46,7 @@ function sources(theme: Theme): TileSource[] {
       options: {
         maxZoom: 19,
         attribution: '&copy; <a href="https://maps.nlsc.gov.tw/">內政部國土測繪中心</a>',
-        className: theme === 'dark' ? 'tiles-dim' : '',
+        className: theme === 'dark' ? 'tiles-dim' : 'tiles-soft',
       },
     },
   ]

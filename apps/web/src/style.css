@@ -136,3 +136,8 @@ body {
 .tiles-dim {
   filter: brightness(0.55) saturate(0.6) contrast(1.1) hue-rotate(10deg);
 }
+
+/* 備用底圖色彩很多，調淡讓垃圾桶點位比較突出 */
+.tiles-soft {
+  filter: saturate(0.35) brightness(1.04) contrast(0.92);
+}
