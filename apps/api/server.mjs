@@ -5,13 +5,14 @@ import { readFile } from 'node:fs/promises'
 const PORT = Number(process.env.PORT ?? 8787)
 const FILL_PATH = new URL('../web/public/data/fill_levels.json', import.meta.url)
 const reports = []
+const dispatches = []
 
 function send(res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
   })
   res.end(body === undefined ? '' : JSON.stringify(body))
 }
@@ -34,6 +35,22 @@ createServer(async (req, res) => {
       if (!['full', 'missing', 'need', 'ok'].includes(r.kind)) return send(res, 400, { error: 'kind 不正確' })
       reports.unshift(r)
       return send(res, 201, r)
+    }
+
+    // 派車紀錄：出發時新增，返隊時補上 returnedAt
+    if (pathname === '/api/dispatches' && req.method === 'GET') return send(res, 200, dispatches)
+    if (pathname === '/api/dispatches' && req.method === 'POST') {
+      const d = await readBody(req)
+      if (!d.id || !d.district || !d.departedAt) return send(res, 400, { error: '缺少 id、district 或 departedAt' })
+      dispatches.unshift(d)
+      return send(res, 201, d)
+    }
+    const m = pathname.match(/^\/api\/dispatches\/([^/]+)$/)
+    if (m && req.method === 'PATCH') {
+      const d = dispatches.find((x) => x.id === decodeURIComponent(m[1]))
+      if (!d) return send(res, 404, { error: '找不到這筆派車' })
+      Object.assign(d, { returnedAt: (await readBody(req)).returnedAt ?? new Date().toISOString() })
+      return send(res, 200, d)
     }
 
     // 模擬 IoT：以靜態填滿率為基礎，被回報「滿了」的桶直接拉到 100%

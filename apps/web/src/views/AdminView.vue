@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import L from 'leaflet'
 import gsap from 'gsap'
 import { createMap, TAIPEI } from '../lib/map'
@@ -17,16 +18,35 @@ import {
   onLocalReportsChange,
   type DataSource,
 } from '../lib/data'
-import { distanceMeters, nearestNeighborRoute, pathMeters, type LatLng } from '../lib/geo'
+import { distanceMeters, loopMeters, splitRoutes, type LatLng } from '../lib/geo'
+import {
+  clearLocalDispatches,
+  createDispatch,
+  estimateMinutes,
+  loadDispatches,
+  markReturned,
+  minutesBetween,
+  onLocalDispatchChange,
+  type Dispatch,
+} from '../lib/dispatch'
 import { FILL_META, fillState, REPORT_COLOR, REPORT_LABEL, type Bin, type FillLevel, type GridCell, type GridData, type Report } from '../types'
 
 type Mode = 'gap' | 'route'
 
 const POLL_MS = 3000
-/** 清潔隊出發點（示意） */
-const DEPOT: LatLng = TAIPEI
+const DISTRICTS = ['中正區', '大同區', '中山區', '松山區', '大安區', '萬華區', '信義區', '士林區', '北投區', '內湖區', '南港區', '文山區']
+/** 同一區最多同時派幾台車（示意） */
+const MAX_TRUCKS = 3
+const TRUCK_COLORS = ['#ffc72c', '#5ac8fa', '#ff8ad8']
 
+const routeQ = useRoute()
+const router = useRouter()
 const mapEl = ref<HTMLElement>()
+/** 目前看哪一區；空字串 = 全市。存在網址 ?d=大安區，重新整理或分享連結都會保留 */
+const district = ref<string>(typeof routeQ.query.d === 'string' && DISTRICTS.includes(routeQ.query.d) ? routeQ.query.d : '')
+const trucks = ref(1)
+const dispatches = ref<Dispatch[]>([])
+const confirmClearLog = ref(false)
 const map = shallowRef<L.Map>()
 const mode = ref<Mode>('gap')
 const bins = ref<Bin[]>([])
@@ -45,20 +65,45 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 let baseLayer: L.LayerGroup | undefined
 let overlayLayer: L.LayerGroup | undefined
 let reportLayer: L.LayerGroup | undefined
-let truck: L.Marker | undefined
 let truckFrame = 0
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 let stopListening: (() => void) | undefined
+let stopDispatchListening: (() => void) | undefined
 let loaded = false
 const svgRenderer = L.svg({ padding: 0.5 })
 
 // ---------- 衍生資料 ----------
-const fillById = computed(() => new Map(fills.value.map((f) => [f.id, f.fill])))
+/**
+ * 派車結果回饋到填滿率：返隊的那趟車停靠過的桶視為已清空（之後又有人回報滿了就以回報為準）。
+ * 真的上線後，這一步由感測器或清潔隊回報取代。
+ */
+const emptiedAt = computed(() => {
+  const m = new Map<string, string>()
+  for (const d of dispatches.value) if (d.returnedAt) for (const id of d.stops) if (!m.has(id) || m.get(id)! < d.returnedAt) m.set(id, d.returnedAt)
+  return m
+})
+const fillById = computed(
+  () =>
+    new Map(
+      fills.value.map((f) => {
+        const t = emptiedAt.value.get(f.id)
+        return [f.id, t && (!f.updatedAt || Date.parse(f.updatedAt) < Date.parse(t)) ? 0.05 : f.fill]
+      }),
+    ),
+)
+/** 已經有車出勤要去收的桶，不再重複排進新路線 */
+const assignedIds = computed(() => new Set(dispatches.value.filter((d) => !d.returnedAt).flatMap((d) => d.stops)))
 const checkedById = computed(() => new Map(fills.value.map((f) => [f.id, f.checkedDaysAgo])))
 /** 超過 14 天沒人確認的桶：資料新鮮度的指標，也是巡桶任務的目標 */
 const staleCount = computed(() => fills.value.filter((f) => (f.checkedDaysAgo ?? 0) >= 14).length)
 const binById = computed(() => new Map(bins.value.map((b) => [b.id, b])))
+const visibleBins = computed(() => (district.value ? bins.value.filter((b) => b.district === district.value) : bins.value))
+const binCountByDistrict = computed(() => {
+  const m = new Map<string, number>()
+  for (const b of bins.value) m.set(b.district, (m.get(b.district) ?? 0) + 1)
+  return m
+})
 
 function nearestBin(lat: number, lng: number): Bin | undefined {
   let best: Bin | undefined
@@ -73,34 +118,35 @@ function nearestBin(lat: number, lng: number): Bin | undefined {
   return best
 }
 
+/** 網格沒有行政區欄位，用最近的垃圾桶所在區代表（北投已在資料端排除） */
+const cellDistrict = computed(() => new Map((grid.value?.cells ?? []).map((c) => [c.id, nearestBin(c.lat, c.lng)?.district ?? ''])))
 // 資料缺漏區（北投）的網格不算缺口，否則會被誤判成最缺垃圾桶
-const gapCells = computed(() => (grid.value?.cells ?? []).filter((c) => c.gap > 0 && !c.missingData))
+const allGapCells = computed(() => (grid.value?.cells ?? []).filter((c) => c.gap > 0 && !c.missingData))
+const gapCells = computed(() => (district.value ? allGapCells.value.filter((c) => cellDistrict.value.get(c.id) === district.value) : allGapCells.value))
 const maxGap = computed(() => Math.max(0.0001, ...gapCells.value.map((c) => c.gap)))
 
-/** 網格沒有地名，用最近的垃圾桶位置當作地標描述 */
+/** 網格沒有地名，用最近的垃圾桶位置當作地標描述。選了行政區就改列該區缺口最大的 10 格 */
 const suggestions = computed(() => {
   const byId = new Map(grid.value?.cells.map((c) => [c.id, c]))
-  return (grid.value?.suggestions ?? [])
-    .map((id) => byId.get(id))
-    .filter((c): c is GridCell => !!c)
+  const cells = district.value
+    ? [...gapCells.value].sort((a, b) => b.gap - a.gap).slice(0, 10)
+    : (grid.value?.suggestions ?? []).map((id) => byId.get(id)).filter((c): c is GridCell => !!c)
+  return cells
     .map((c) => {
       const near = nearestBin(c.lat, c.lng)
       return { cell: c, place: near ? near.road.replace(/第 \d+ 組$|散點 \d+$/, '').trim() : '未命名區域', district: near?.district ?? '' }
     })
 })
 
-const DISTRICTS = ['中正區', '大同區', '中山區', '松山區', '大安區', '萬華區', '信義區', '士林區', '北投區', '內湖區', '南港區', '文山區']
-
 /**
  * 各區缺口。資料裡某區 0 個點位時視為「資料缺漏」，不排名：
  * 開放資料 121355 的北投區就是 0 筆，不能解讀成北投最缺垃圾桶
  */
 const districtGaps = computed(() => {
-  const binCount = new Map<string, number>()
-  for (const b of bins.value) binCount.set(b.district, (binCount.get(b.district) ?? 0) + 1)
+  const binCount = binCountByDistrict.value
   const sum = new Map<string, number>()
-  for (const c of gapCells.value) {
-    const d = nearestBin(c.lat, c.lng)?.district
+  for (const c of allGapCells.value) {
+    const d = cellDistrict.value.get(c.id)
     if (d) sum.set(d, (sum.get(d) ?? 0) + c.gap)
   }
   const ranked = DISTRICTS.filter((d) => (binCount.get(d) ?? 0) > 0)
@@ -111,21 +157,92 @@ const districtGaps = computed(() => {
   return [...ranked, ...missing].map((r) => ({ ...r, share: r.gap / max }))
 })
 
-const fullBins = computed(() => bins.value.filter((b) => (fillById.value.get(b.id) ?? 0) >= threshold.value))
-const route = computed(() => nearestNeighborRoute(DEPOT, fullBins.value))
-const routePath = computed<LatLng[]>(() => [DEPOT, ...route.value.map((b) => [b.lat, b.lng] as LatLng)])
-const routeKm = computed(() => pathMeters(routePath.value) / 1000)
+const isDue = (b: Bin) => (fillById.value.get(b.id) ?? 0) >= threshold.value
+const fullBins = computed(() => visibleBins.value.filter((b) => isDue(b) && !assignedIds.value.has(b.id)))
+const assignedCount = computed(() => visibleBins.value.filter((b) => assignedIds.value.has(b.id)).length)
+const dueByDistrict = computed(() => {
+  const m = new Map<string, number>()
+  for (const b of bins.value) if (isDue(b)) m.set(b.district, (m.get(b.district) ?? 0) + 1)
+  return m
+})
+
+/**
+ * 清潔隊出發點：每區一個清潔隊。還沒有各隊的實際地址，先用該區垃圾桶點位的中心點示意。
+ * 全市視角用市府當中心。
+ */
+const depot = computed<LatLng>(() => {
+  const list = visibleBins.value
+  if (!district.value || !list.length) return TAIPEI
+  return [list.reduce((s, b) => s + b.lat, 0) / list.length, list.reduce((s, b) => s + b.lng, 0) / list.length]
+})
+
+/** 只有選了行政區才排路線：每區有自己的清潔隊與車輛，跨區排一條路線沒有意義 */
+const routes = computed(() => (district.value && fullBins.value.length ? splitRoutes(depot.value, fullBins.value, trucks.value) : []))
+const routePlans = computed(() =>
+  routes.value.map((stops, i) => {
+    const km = loopMeters(depot.value, stops) / 1000
+    return { truck: i + 1, color: TRUCK_COLORS[i % TRUCK_COLORS.length], stops, km, estMin: estimateMinutes(km, stops.length) }
+  }),
+)
+const routeKm = computed(() => routePlans.value.reduce((s, r) => s + r.km, 0))
+
+// ---------- 派車紀錄 ----------
+const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString()
+const todayDispatches = computed(() => dispatches.value.filter((d) => isToday(d.departedAt) && (!district.value || d.district === district.value)))
+const onDuty = computed(() => todayDispatches.value.filter((d) => !d.returnedAt))
+const onDutyByDistrict = computed(() => {
+  const m = new Map<string, number>()
+  for (const d of dispatches.value) if (!d.returnedAt && isToday(d.departedAt)) m.set(d.district, (m.get(d.district) ?? 0) + 1)
+  return m
+})
+/** 已返隊的趟次：實際用時對預估的比例，> 100% 代表比預估慢，可回頭校正每桶作業時間 */
+const efficiency = computed(() => {
+  const done = todayDispatches.value.filter((d) => d.returnedAt)
+  if (!done.length) return undefined
+  const actual = done.reduce((s, d) => s + minutesBetween(d.departedAt, d.returnedAt!), 0)
+  const est = done.reduce((s, d) => s + d.estMin, 0)
+  const stops = done.reduce((s, d) => s + d.stops.length, 0)
+  return { trips: done.length, ratio: est ? actual / est : 0, perStop: stops ? actual / stops : 0 }
+})
+
+async function dispatchTrucks() {
+  for (const plan of routePlans.value) {
+    await createDispatch({ district: district.value, truck: plan.truck, stops: plan.stops.map((b) => b.id), km: Math.round(plan.km * 10) / 10, estMin: plan.estMin })
+  }
+  dispatches.value = await loadDispatches()
+}
+
+async function returnTruck(id: string) {
+  await markReturned(id)
+  dispatches.value = await loadDispatches()
+}
+
+function clearLog() {
+  if (!confirmClearLog.value) {
+    confirmClearLog.value = true
+    setTimeout(() => (confirmClearLog.value = false), 3000)
+    return
+  }
+  confirmClearLog.value = false
+  clearLocalDispatches()
+  loadDispatches().then((d) => (dispatches.value = d))
+}
+
+function districtOfReport(r: Report) {
+  return (r.binId ? binById.value.get(r.binId)?.district : undefined) ?? nearestBin(r.lat, r.lng)?.district ?? ''
+}
+const visibleReports = computed(() => (district.value ? reports.value.filter((r) => districtOfReport(r) === district.value) : reports.value))
 
 const todayReports = computed(() => {
   const start = new Date()
   start.setHours(0, 0, 0, 0)
-  return reports.value.filter((r) => new Date(r.createdAt) >= start)
+  return visibleReports.value.filter((r) => new Date(r.createdAt) >= start)
 })
 
 // ---------- 頂部數字：GSAP 數字滾動 ----------
 const shown = reactive({ bins: 0, pickup: 0, gaps: 0, reports: 0 })
 const targets = computed(() => ({
-  bins: official.value?.current.count ?? 0,
+  bins: district.value ? visibleBins.value.length : (official.value?.current.count ?? 0),
   pickup: fullBins.value.length,
   gaps: gapCells.value.length,
   reports: todayReports.value.length,
@@ -170,6 +287,11 @@ function drawBase() {
   }
 
   for (const b of bins.value) {
+    // 其他區的垃圾桶淡淡畫出來當背景，保留和鄰區的相對位置
+    if (district.value && b.district !== district.value) {
+      L.circleMarker([b.lat, b.lng], { radius: 1.5, stroke: false, fillColor: '#6f9a84', fillOpacity: 0.25, interactive: false }).addTo(baseLayer)
+      continue
+    }
     const fill = fillById.value.get(b.id) ?? 0
     const routeMode = mode.value === 'route'
     const due = fill >= threshold.value
@@ -208,9 +330,13 @@ function drawOverlay() {
     return
   }
 
-  L.polyline(routePath.value, { renderer: svgRenderer, color: '#ffc72c', weight: 7, opacity: 0.18 }).addTo(overlayLayer)
-  L.polyline(routePath.value, { renderer: svgRenderer, color: '#ffc72c', weight: 3, className: 'route-flow' }).addTo(overlayLayer)
-  L.marker(DEPOT, {
+  if (!district.value) return
+  for (const plan of routePlans.value) {
+    const path = planPath(plan.stops)
+    L.polyline(path, { renderer: svgRenderer, color: plan.color, weight: 7, opacity: 0.18 }).addTo(overlayLayer)
+    L.polyline(path, { renderer: svgRenderer, color: plan.color, weight: 3, className: 'route-flow' }).addTo(overlayLayer)
+  }
+  L.marker(depot.value, {
     icon: L.divIcon({
       className: '',
       iconSize: [34, 34],
@@ -218,42 +344,47 @@ function drawOverlay() {
       html: '<div style="width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:#0b5d3b;border:2px solid #fff;color:#fff;font-size:12px;font-weight:700">隊</div>',
     }),
   })
-    .bindTooltip('清潔隊出發點（示意）')
+    .bindTooltip(`${district.value}清潔隊（示意位置）`)
     .addTo(overlayLayer)
-  startTruck()
+  routePlans.value.forEach((plan) => startTruck(planPath(plan.stops), plan.color))
 }
 
-const TRUCK_HTML = `
-  <div style="width:40px;height:40px;display:grid;place-items:center;border-radius:9999px;background:#ffc72c;box-shadow:0 0 0 3px #0b1a14,0 6px 18px rgb(0 0 0 / .45)">
+const planPath = (stops: Bin[]): LatLng[] => [depot.value, ...stops.map((b) => [b.lat, b.lng] as LatLng), depot.value]
+
+const truckHtml = (color: string) => `
+  <div style="width:40px;height:40px;display:grid;place-items:center;border-radius:9999px;background:${color};box-shadow:0 0 0 3px #0b1a14,0 6px 18px rgb(0 0 0 / .45)">
     <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
       <path d="M3 9h15v12H3zM18 13h6l4 4v4H18z" fill="#10251c"/>
-      <circle cx="9" cy="23" r="3" fill="#10251c" stroke="#ffc72c" stroke-width="1.5"/>
-      <circle cx="23" cy="23" r="3" fill="#10251c" stroke="#ffc72c" stroke-width="1.5"/>
+      <circle cx="9" cy="23" r="3" fill="#10251c" stroke="${color}" stroke-width="1.5"/>
+      <circle cx="23" cy="23" r="3" fill="#10251c" stroke="${color}" stroke-width="1.5"/>
     </svg>
   </div>`
 
-/** 垃圾車沿路線行駛：戰情室唯一一個持續的動態 */
-function startTruck() {
-  if (!map.value || !overlayLayer || routePath.value.length < 2) return
-  const pts = routePath.value
+/** 垃圾車沿路線行駛（多台車共用一個 animation frame 迴圈） */
+const animated: { marker: L.Marker; pts: LatLng[]; seg: number[]; duration: number }[] = []
+function startTruck(pts: LatLng[], color: string) {
+  if (!map.value || !overlayLayer || pts.length < 2) return
   const seg: number[] = [0]
   for (let i = 1; i < pts.length; i++) seg.push(seg[i - 1] + distanceMeters(pts[i - 1], pts[i]))
-  const total = seg[seg.length - 1]
-  truck = L.marker(pts[0], {
-    icon: L.divIcon({ className: '', html: TRUCK_HTML, iconSize: [40, 40], iconAnchor: [20, 20] }),
+  const marker = L.marker(pts[0], {
+    icon: L.divIcon({ className: '', html: truckHtml(color), iconSize: [40, 40], iconAnchor: [20, 20] }),
     interactive: false,
     zIndexOffset: 1000,
   }).addTo(overlayLayer)
   if (reduceMotion) return
-  const duration = Math.min(40000, Math.max(14000, total * 1.2))
+  animated.push({ marker, pts, seg, duration: Math.min(40000, Math.max(14000, seg[seg.length - 1] * 1.2)) })
+  if (truckFrame) return
   const t0 = performance.now()
   const step = (t: number) => {
-    const d = (((t - t0) % duration) / duration) * total
-    let i = 1
-    while (i < seg.length - 1 && seg[i] < d) i++
-    const k = (d - seg[i - 1]) / Math.max(1, seg[i] - seg[i - 1])
-    const [a, b] = [pts[i - 1], pts[i]]
-    truck?.setLatLng([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k])
+    for (const a of animated) {
+      const total = a.seg[a.seg.length - 1]
+      const d = (((t - t0) % a.duration) / a.duration) * total
+      let i = 1
+      while (i < a.seg.length - 1 && a.seg[i] < d) i++
+      const k = (d - a.seg[i - 1]) / Math.max(1, a.seg[i] - a.seg[i - 1])
+      const [p, q] = [a.pts[i - 1], a.pts[i]]
+      a.marker.setLatLng([p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k])
+    }
     truckFrame = requestAnimationFrame(step)
   }
   truckFrame = requestAnimationFrame(step)
@@ -261,14 +392,15 @@ function startTruck() {
 
 function stopTruck() {
   cancelAnimationFrame(truckFrame)
-  truck = undefined
+  truckFrame = 0
+  animated.length = 0
 }
 
 function drawReports() {
   if (!map.value) return
   reportLayer?.remove()
   reportLayer = L.layerGroup().addTo(map.value)
-  for (const r of reports.value) {
+  for (const r of visibleReports.value) {
     if (freshIds.value.has(r.id)) {
       L.marker([r.lat, r.lng], {
         icon: L.divIcon({ className: '', iconSize: [36, 36], iconAnchor: [18, 18], html: `<span class="ping-ring" style="--c:${REPORT_COLOR[r.kind]}"></span>` }),
@@ -288,8 +420,9 @@ function flyTo(lat: number, lng: number, zoom = 17) {
 // ---------- 資料更新 ----------
 async function refresh() {
   try {
-    const [nextFills, nextReports] = await Promise.all([loadFillLevels(), loadReports()])
+    const [nextFills, nextReports, nextDispatches] = await Promise.all([loadFillLevels(), loadReports(), loadDispatches()])
     source.value = lastSource
+    if (JSON.stringify(nextDispatches) !== JSON.stringify(dispatches.value)) dispatches.value = nextDispatches
     if (JSON.stringify(nextFills) !== JSON.stringify(fills.value)) fills.value = nextFills
 
     const known = new Set(reports.value.map((r) => r.id))
@@ -299,7 +432,12 @@ async function refresh() {
       if (loaded && added.length) {
         freshIds.value = new Set([...freshIds.value, ...added.map((r) => r.id)])
         const latest = added[0]
-        if (latest.kind === 'full') mode.value = 'route'
+        // 「滿了」：直接切到那一區的清運調度，市府人員可以馬上派車
+        if (latest.kind === 'full') {
+          mode.value = 'route'
+          const d = districtOfReport(latest)
+          if (d) district.value = d
+        }
         flyTo(latest.lat, latest.lng, 16)
         setTimeout(() => {
           freshIds.value = new Set([...freshIds.value].filter((id) => !added.some((r) => r.id === id)))
@@ -323,9 +461,22 @@ function resetDemo() {
   refresh()
 }
 
+function fitDistrict() {
+  if (!map.value) return
+  const pts = visibleBins.value.map((b) => [b.lat, b.lng] as LatLng)
+  if (!district.value || !pts.length) map.value.flyTo([25.05, 121.545], 13, { duration: reduceMotion ? 0 : 0.8 })
+  else map.value.flyToBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 15, duration: reduceMotion ? 0 : 0.8 })
+}
+
+watch(district, (d) => {
+  router.replace({ query: { ...routeQ.query, d: d || undefined } })
+  trucks.value = 1
+  fitDistrict()
+})
+
 const timeFmt = (iso: string) => new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 
-watch([mode, threshold, fills, grid, bins], () => {
+watch([mode, threshold, fills, grid, bins, district, trucks], () => {
   drawBase()
   drawOverlay()
 })
@@ -338,17 +489,21 @@ onMounted(async () => {
   mock.value = isMock(meta)
   bins.value = b
   grid.value = g
+  dispatches.value = await loadDispatches()
+  if (district.value) fitDistrict()
   await refresh()
   loaded = true
   pollTimer = setInterval(refresh, POLL_MS)
   clockTimer = setInterval(() => (now.value = new Date()), 1000)
   stopListening = onLocalReportsChange(refresh)
+  stopDispatchListening = onLocalDispatchChange(() => loadDispatches().then((d) => (dispatches.value = d)))
 })
 
 onBeforeUnmount(() => {
   clearInterval(pollTimer)
   clearInterval(clockTimer)
   stopListening?.()
+  stopDispatchListening?.()
   stopTruck()
   gsap.killTweensOf(shown)
   map.value?.remove()
@@ -368,8 +523,14 @@ onBeforeUnmount(() => {
 
       <dl class="order-3 flex w-full gap-6 overflow-x-auto lg:order-none lg:w-auto lg:flex-1 lg:justify-center lg:gap-10">
         <div class="shrink-0">
-          <dt class="text-xs text-night-mute" :title="official?.current.source">官方統計{{ official ? `（${official.current.date.replace('-', '/')}）` : '' }}</dt>
-          <dd class="num text-[30px] leading-tight font-semibold">{{ shown.bins.toLocaleString() }}<span class="ml-1 font-sans text-sm font-normal text-night-mute">{{ official?.current.unit }}</span></dd>
+          <template v-if="district">
+            <dt class="text-xs text-night-mute">{{ district }}點位（開放資料）</dt>
+            <dd class="num text-[30px] leading-tight font-semibold">{{ shown.bins.toLocaleString() }}<span class="ml-1 font-sans text-sm font-normal text-night-mute">筆</span></dd>
+          </template>
+          <template v-else>
+            <dt class="text-xs text-night-mute" :title="official?.current.source">官方統計{{ official ? `（${official.current.date.replace('-', '/')}）` : '' }}</dt>
+            <dd class="num text-[30px] leading-tight font-semibold">{{ shown.bins.toLocaleString() }}<span class="ml-1 font-sans text-sm font-normal text-night-mute">{{ official?.current.unit }}</span></dd>
+          </template>
         </div>
         <div class="shrink-0">
           <dt class="text-xs text-night-mute">待清運</dt>
@@ -397,6 +558,32 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <!-- 行政區標籤：每區有自己的清潔隊，派車與成效都以區為單位 -->
+    <nav class="flex shrink-0 gap-1.5 overflow-x-auto border-b border-night-line px-4 py-2 lg:px-5" aria-label="行政區">
+      <button
+        v-for="d in ['', ...DISTRICTS]"
+        :key="d || 'all'"
+        class="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition"
+        :class="[
+          district === d ? 'border-truck bg-truck font-bold text-ink' : 'border-night-line hover:bg-night-2',
+          d && !binCountByDistrict.get(d) ? 'opacity-45' : '',
+        ]"
+        :aria-pressed="district === d"
+        :disabled="!!d && !binCountByDistrict.get(d)"
+        :title="d && !binCountByDistrict.get(d) ? '開放資料沒有這一區的點位' : ''"
+        @click="district = d"
+      >
+        {{ d || '全市' }}
+        <span
+          v-if="d ? dueByDistrict.get(d) : fullBins.length && !district"
+          class="num rounded-full px-1.5 text-xs leading-5"
+          :class="district === d ? 'bg-ink/15' : 'bg-alert/90 text-white'"
+          :title="'待清運'"
+        >{{ d ? dueByDistrict.get(d) : bins.filter(isDue).length }}</span>
+        <span v-if="d && onDutyByDistrict.get(d)" class="h-2 w-2 rounded-full bg-[#7fd6a4]" title="有車出勤中" />
+      </button>
+    </nav>
+
     <!-- 主體 -->
     <div class="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[340px_1fr_320px] lg:overflow-hidden">
       <!-- 左：模式 -->
@@ -419,8 +606,8 @@ onBeforeUnmount(() => {
 
         <div class="p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           <template v-if="mode === 'gap'">
-            <h2 class="text-base font-bold">哪裡最缺垃圾桶</h2>
-            <p class="mt-1 text-sm leading-relaxed text-night-mute">人流和陳情多、垃圾桶少的地方。每格 {{ grid?.cellMeters ?? 250 }} 公尺見方，地圖上共 {{ bins.length }} 個垃圾桶點位。</p>
+            <h2 class="text-base font-bold">{{ district || '全市' }}哪裡最缺垃圾桶</h2>
+            <p class="mt-1 text-sm leading-relaxed text-night-mute">人流和陳情多、垃圾桶少的地方。每格 {{ grid?.cellMeters ?? 250 }} 公尺見方，{{ district || '地圖上' }}共 {{ visibleBins.length }} 個垃圾桶點位。</p>
             <p class="mt-2 text-sm leading-relaxed text-night-mute">
               其中 <span class="num text-base font-semibold text-truck">{{ staleCount }}</span> 桶超過 14 天沒人確認，已列入市民端的巡桶任務。
             </p>
@@ -432,6 +619,7 @@ onBeforeUnmount(() => {
 
             <h3 class="mt-6 text-sm font-bold">候選新設點</h3>
             <p class="mb-2 text-xs leading-relaxed text-night-mute">實際設置仍要符合設置原則，並經現場會勘。</p>
+            <p v-if="!suggestions.length" class="text-sm text-night-mute">這一區目前沒有缺口明顯的網格。</p>
             <ol>
               <li v-for="(s, i) in suggestions" :key="s.cell.id">
                 <button class="group flex w-full items-center gap-3 border-t border-night-line py-2.5 text-left first:border-t-0" @click="flyTo(s.cell.lat, s.cell.lng)">
@@ -446,28 +634,108 @@ onBeforeUnmount(() => {
             </ol>
           </template>
 
+          <!-- 全市：各區待清運總覽，點一區進去派車 -->
+          <template v-else-if="!district">
+            <h2 class="text-base font-bold">各區待清運</h2>
+            <p class="mt-1 text-sm leading-relaxed text-night-mute">每區有自己的清潔隊。選一區排路線、派車。</p>
+            <label class="mt-4 block text-xs text-night-mute">
+              <span class="flex justify-between"><span>填滿多少就派車</span><span class="num text-sm text-night-text">{{ Math.round(threshold * 100) }}%</span></span>
+              <input v-model.number="threshold" type="range" min="0.5" max="1" step="0.05" class="mt-2 w-full accent-[#ffc72c]" />
+            </label>
+            <ul class="mt-4">
+              <li v-for="d in [...DISTRICTS].filter((x) => binCountByDistrict.get(x)).sort((a, b) => (dueByDistrict.get(b) ?? 0) - (dueByDistrict.get(a) ?? 0))" :key="d">
+                <button class="group flex w-full items-center gap-3 border-t border-night-line py-2.5 text-left first:border-t-0" @click="district = d">
+                  <span class="w-14 shrink-0 text-sm group-hover:text-truck">{{ d }}</span>
+                  <span class="block h-2 flex-1 rounded-r-full bg-night-2">
+                    <span class="block h-full rounded-r-full bg-alert/80" :style="{ width: `${((dueByDistrict.get(d) ?? 0) / Math.max(1, ...dueByDistrict.values())) * 100}%` }" />
+                  </span>
+                  <span class="num w-8 shrink-0 text-right text-sm text-[#ff8a8d]">{{ dueByDistrict.get(d) ?? 0 }}</span>
+                  <span class="w-12 shrink-0 text-right text-xs" :class="onDutyByDistrict.get(d) ? 'text-[#7fd6a4]' : 'text-night-mute'">{{ onDutyByDistrict.get(d) ? `${onDutyByDistrict.get(d)} 車出勤` : '待命' }}</span>
+                </button>
+              </li>
+            </ul>
+            <p class="mt-3 text-xs text-night-mute">北投區在開放資料沒有點位，暫不列入。</p>
+          </template>
+
+          <!-- 單一區：排路線、派車、記錄返隊時間 -->
           <template v-else>
-            <h2 class="text-base font-bold">今天要先收哪些</h2>
+            <h2 class="text-base font-bold">{{ district }}今天要先收哪些</h2>
             <p class="mt-1 text-sm leading-relaxed text-night-mute">
-              <span class="num text-lg font-semibold text-truck">{{ fullBins.length }}</span> 桶超過門檻，路線約
-              <span class="num text-lg font-semibold text-night-text">{{ routeKm.toFixed(1) }}</span> 公里
+              <span class="num text-lg font-semibold text-truck">{{ fullBins.length }}</span> 桶超過門檻還沒派車，路線合計約
+              <span class="num text-lg font-semibold text-night-text">{{ routeKm.toFixed(1) }}</span> 公里（含返隊）
             </p>
+            <p v-if="assignedCount" class="mt-1 text-xs text-[#7fd6a4]">另有 {{ assignedCount }} 桶已有車在收，返隊後會視為已清空。</p>
             <label class="mt-4 block text-xs text-night-mute">
               <span class="flex justify-between"><span>填滿多少就派車</span><span class="num text-sm text-night-text">{{ Math.round(threshold * 100) }}%</span></span>
               <input v-model.number="threshold" type="range" min="0.5" max="1" step="0.05" class="mt-2 w-full accent-[#ffc72c]" />
             </label>
 
-            <h3 class="mt-6 mb-2 text-sm font-bold">停靠順序</h3>
-            <ol>
-              <li v-for="(b, i) in route" :key="b.id">
-                <button class="group flex w-full items-center gap-3 border-t border-night-line py-2 text-left first:border-t-0" @click="flyTo(b.lat, b.lng, 18)">
-                  <span class="num w-6 shrink-0 text-right text-sm text-night-mute">{{ i + 1 }}</span>
-                  <span class="min-w-0 flex-1 truncate text-sm group-hover:text-truck">{{ b.road }}</span>
-                  <span class="num shrink-0 text-sm text-[#ff8a8d]">{{ Math.round((fillById.get(b.id) ?? 0) * 100) }}%</span>
-                </button>
+            <div class="mt-4 flex items-center justify-between text-xs text-night-mute">
+              <span>派幾台車</span>
+              <span class="flex gap-1">
+                <button
+                  v-for="n in MAX_TRUCKS"
+                  :key="n"
+                  class="num h-7 w-8 rounded-[6px] text-sm"
+                  :class="trucks === n ? 'bg-night-3 font-bold text-white shadow-[inset_0_-2px_0_#ffc72c]' : 'bg-night-2 hover:text-night-text'"
+                  :disabled="n > Math.max(1, fullBins.length)"
+                  @click="trucks = n"
+                >{{ n }}</button>
+              </span>
+            </div>
+
+            <ul class="mt-3 space-y-2">
+              <li v-for="p in routePlans" :key="p.truck" class="rounded-[10px] bg-night-2 p-3">
+                <div class="flex items-center gap-2 text-sm">
+                  <span class="h-2.5 w-2.5 rounded-full" :style="{ background: p.color }" />
+                  <span class="font-bold">第 {{ p.truck }} 車</span>
+                  <span class="ml-auto num text-night-mute">{{ p.stops.length }} 桶 · {{ p.km.toFixed(1) }} km · 約 {{ p.estMin }} 分</span>
+                </div>
+                <ol class="mt-2">
+                  <li v-for="(b, i) in p.stops" :key="b.id">
+                    <button class="group flex w-full items-center gap-2 py-1 text-left" @click="flyTo(b.lat, b.lng, 18)">
+                      <span class="num w-5 shrink-0 text-right text-xs text-night-mute">{{ i + 1 }}</span>
+                      <span class="min-w-0 flex-1 truncate text-sm group-hover:text-truck">{{ b.road }}</span>
+                      <span class="num shrink-0 text-xs text-[#ff8a8d]">{{ Math.round((fillById.get(b.id) ?? 0) * 100) }}%</span>
+                    </button>
+                  </li>
+                </ol>
               </li>
-            </ol>
-            <p class="mt-4 text-xs leading-relaxed text-night-mute">路線用最近距離排序，示意用。填滿率是模擬的感測資料，市民回報「滿了」會直接計為 100%。</p>
+            </ul>
+
+            <button
+              class="mt-3 w-full rounded-[10px] bg-truck py-2.5 text-sm font-bold text-ink transition hover:brightness-105 disabled:opacity-40"
+              :disabled="!routePlans.length"
+              @click="dispatchTrucks"
+            >
+              {{ routePlans.length ? `派出 ${routePlans.length} 台車` : '目前沒有要清運的桶' }}
+            </button>
+
+            <h3 class="mt-6 flex items-baseline justify-between text-sm font-bold">
+              今日派車紀錄
+              <button v-if="todayDispatches.length" class="text-xs font-normal" :class="confirmClearLog ? 'font-bold text-alert' : 'text-night-mute hover:text-night-text'" @click="clearLog">
+                {{ confirmClearLog ? '再按一次清空' : '清空' }}
+              </button>
+            </h3>
+            <p v-if="efficiency" class="mt-1 text-xs leading-relaxed text-night-mute">
+              已返隊 {{ efficiency.trips }} 趟，實際用時是預估的
+              <span class="num text-sm" :class="efficiency.ratio > 1.1 ? 'text-[#ff8a8d]' : 'text-[#7fd6a4]'">{{ Math.round(efficiency.ratio * 100) }}%</span>，平均每桶
+              <span class="num text-sm text-night-text">{{ efficiency.perStop.toFixed(1) }}</span> 分鐘
+            </p>
+            <p v-if="!todayDispatches.length" class="mt-2 text-xs leading-relaxed text-night-mute">按「派出」記下出發時間，車子回來按「返隊」。累積下來就能比較各區的清運效率，校正之後的派車。</p>
+            <ul class="mt-2 space-y-1.5">
+              <li v-for="d in todayDispatches" :key="d.id" class="flex items-center gap-2 rounded-[8px] border border-night-line px-2.5 py-2 text-sm">
+                <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: TRUCK_COLORS[(d.truck - 1) % TRUCK_COLORS.length] }" />
+                <span class="min-w-0 flex-1">
+                  <span class="block">第 {{ d.truck }} 車 · {{ d.stops.length }} 桶</span>
+                  <span class="num block text-xs text-night-mute">
+                    {{ timeFmt(d.departedAt) }} 出發<template v-if="d.returnedAt"> → {{ timeFmt(d.returnedAt) }} 返隊，用時 {{ minutesBetween(d.departedAt, d.returnedAt) }} 分（預估 {{ d.estMin }}）</template><template v-else>，預估 {{ d.estMin }} 分</template>
+                  </span>
+                </span>
+                <button v-if="!d.returnedAt" class="shrink-0 rounded-full bg-[#7fd6a4] px-2.5 py-1 text-xs font-bold text-ink" @click="returnTruck(d.id)">返隊</button>
+              </li>
+            </ul>
+            <p class="mt-4 text-xs leading-relaxed text-night-mute">路線先用最近鄰居法排，再用 2-opt 解開交叉；多台車依方向分區。清潔隊位置與作業時間為示意參數。填滿率是模擬的感測資料，市民回報「滿了」會直接計為 100%。</p>
           </template>
         </div>
       </aside>

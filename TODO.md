@@ -99,6 +99,9 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 | GET | `/api/fill-levels` | `[{ "id": "bin-0000", "fill": 0.82, "updatedAt": "ISO 時間" }]` |
 | GET | `/api/reports` | 回報陣列，新的在前 |
 | POST | `/api/reports` | 收 `{ id, kind, lat, lng, binId?, createdAt }`，回 201 |
+| GET | `/api/dispatches` | 派車紀錄陣列，新的在前 |
+| POST | `/api/dispatches` | 收 `{ id, district, truck, stops[], km, estMin, departedAt }`，回 201 |
+| PATCH | `/api/dispatches/:id` | 收 `{ returnedAt }`（返隊時間），回 200 |
 
 - `kind` 只能是 `full`（滿了）、`missing`（不見了）、`need`（這裡需要一個）
 - 被回報 `full` 的 `binId`，在 `/api/fill-levels` 要變成 `fill: 1`
@@ -108,7 +111,7 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ### Pamis
 - [ ] 建立 `apps/api-dotnet`（ASP.NET Core Minimal API）
-- [ ] 實作上面四個端點（資料先存記憶體即可）
+- [ ] 實作上面的端點（資料先存記憶體即可；派車三個端點是 10/23 會議後新增，Node 版 `apps/api/server.mjs` 已有可對照）
 - [ ] CORS、Dockerfile
 - [ ] **今天就部署一個 hello world 測通**，不要等到明天
 - [ ] 部署後把網址告訴 Harry 設定 `VITE_API_URL`
@@ -116,7 +119,8 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ### Vicky
 - [ ] 填滿率模擬：以 `apps/web/public/data/fill_levels.json` 為基礎，讓數值隨時間緩慢上升，Demo 時看得出變化
-- [ ] 清運路線（選做）：目前前端用最近鄰居法排序，若時間夠可改由 API 計算並回傳順序
+- [x] 分區派車（10/23 會議提出）：戰情室已加行政區標籤、每區 1–3 台車分工、派車／返隊時間紀錄與用時對預估比較，見 `docs/meetings/2026-10-23-kickoff.md`
+- [ ] 清運路線（選做）：前端目前用最近鄰居法 + 2-opt，多台車依方向分區；若時間夠可改由 API 計算並回傳順序
 - [ ] 協助 Pamis 測試 API
 
 ---
