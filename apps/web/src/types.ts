@@ -12,6 +12,9 @@ export interface FillLevel {
   id: string
   fill: number
   updatedAt: string
+  /** 模擬：幾天前有人確認過這桶 */
+  checkedDaysAgo?: number
+  simulated?: boolean
 }
 
 export interface GridCell {
@@ -31,7 +34,7 @@ export interface GridData {
   suggestions: string[]
 }
 
-export type ReportKind = 'full' | 'missing' | 'need'
+export type ReportKind = 'full' | 'missing' | 'need' | 'ok'
 
 export interface Report {
   id: string
@@ -46,12 +49,14 @@ export const REPORT_LABEL: Record<ReportKind, string> = {
   full: '滿了',
   missing: '不見了',
   need: '這裡需要一個',
+  ok: '狀況良好',
 }
 
 export const REPORT_COLOR: Record<ReportKind, string> = {
   full: '#e5484d',
   missing: '#9aa9a1',
   need: '#ffc72c',
+  ok: '#7fd6a4',
 }
 
 export type FillState = 'ok' | 'busy' | 'full'

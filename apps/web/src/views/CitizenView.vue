@@ -2,9 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import L from 'leaflet'
 import { createMap, TAIPEI } from '../lib/map'
-import { isMock, loadBins, loadFillLevels, loadMeta, submitReport } from '../lib/data'
+import { useRoute } from 'vue-router'
+import { isMock, loadBins, loadFillLevels, loadGrid, loadMeta, submitReport } from '../lib/data'
+import { shortCode, verifyBin } from '../lib/qr'
+import { claim, POINTS, STALE_DAYS, totals } from '../lib/rewards'
 import { bearingDeg, compassWord, distanceMeters, walkingMinutes, type LatLng } from '../lib/geo'
-import { FILL_META, fillState, REPORT_LABEL, type Bin, type ReportKind } from '../types'
+import { FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type ReportKind } from '../types'
 
 type LocateState = 'locating' | 'ok' | 'denied'
 
@@ -22,6 +25,13 @@ const toast = ref('')
 const collapsed = ref(false)
 const mock = ref(true)
 const arrowDeg = ref(0)
+const route = useRoute()
+/** 掃碼開啟的垃圾桶；簽章不符時 scanValid = false */
+const scannedId = ref<string>()
+const scanValid = ref<boolean>()
+const checkedDays = ref(new Map<string, number>())
+const points = ref(totals())
+const gapCells = ref<GridCell[]>([])
 
 let binLayer: L.LayerGroup | undefined
 let focusLayer: L.LayerGroup | undefined
@@ -43,6 +53,35 @@ const alternative = computed(() =>
     : undefined,
 )
 const nearby = computed(() => ranked.value.filter((r) => r.bin.id !== target.value?.bin.id).slice(0, 5))
+const isScanned = (bin?: Bin) => !!bin && scanValid.value === true && scannedId.value === bin.id
+const isStale = (id: string) => (checkedDays.value.get(id) ?? 0) >= STALE_DAYS
+
+/**
+ * 巡桶任務：依「資料價值」排序，不是依距離。
+ * 很久沒人確認的桶、附近疑似沒有垃圾桶的地方，最值得去看。
+ */
+const quests = computed(() => {
+  const staleBins = ranked.value
+    .slice(0, 40)
+    .filter((r) => isStale(r.bin.id) && r.meters < 1200)
+    .slice(0, 2)
+    .map((r) => ({
+      id: r.bin.id,
+      title: r.bin.road,
+      detail: `${checkedDays.value.get(r.bin.id)} 天沒人確認`,
+      meters: r.meters,
+      reward: POINTS.scan + POINTS.staleBonus,
+      bin: r.bin,
+    }))
+  const maxGap = Math.max(0.0001, ...gapCells.value.map((c) => c.gap))
+  const desert = gapCells.value
+    .filter((c) => c.supply === 0 && c.gap / maxGap > 0.4)
+    .map((c) => ({ c, meters: distanceMeters(here.value, [c.lat, c.lng]) }))
+    .filter((x) => x.meters < 1500)
+    .sort((a, b) => a.meters - b.meters)[0]
+  return { staleBins, desert }
+})
+
 const bearing = computed(() => (target.value ? bearingDeg(here.value, [target.value.bin.lat, target.value.bin.lng]) : 0))
 
 const locateText = computed(
@@ -130,8 +169,10 @@ function locate() {
   locateState.value = 'locating'
   navigator.geolocation.getCurrentPosition(
     (p) => {
-      here.value = [p.coords.latitude, p.coords.longitude]
       locateState.value = 'ok'
+      // 掃碼開啟時，人就在那一桶旁邊，保留掃到的位置與目標
+      if (scanValid.value) return
+      here.value = [p.coords.latitude, p.coords.longitude]
       pickedId.value = undefined
     },
     () => (locateState.value = 'denied'),
@@ -157,7 +198,21 @@ async function report(kind: ReportKind, bin?: Bin) {
     reported.value = new Set([...reported.value, key])
     navigator.vibrate?.(30)
     if (kind === 'full' && bin) fills.value = new Map(fills.value).set(bin.id, 1)
-    showToast(kind === 'need' ? '已回報這裡需要垃圾桶，市府會看到' : `已回報「${REPORT_LABEL[kind]}」，清潔隊會看到`)
+    // 綠點：回報什麼狀態都一樣，只看有沒有掃碼、這桶多久沒人確認
+    const reward = claim({
+      kind,
+      binId: bin?.id,
+      scanned: isScanned(bin),
+      located: locateState.value === 'ok' || scanValid.value === true,
+      stale: bin ? isStale(bin.id) : false,
+      lat: at[0],
+      lng: at[1],
+    })
+    points.value = totals()
+    if (bin) checkedDays.value = new Map(checkedDays.value).set(bin.id, 0)
+    const sent = kind === 'need' ? '已回報這裡需要垃圾桶，市府會看到' : `已回報「${REPORT_LABEL[kind]}」`
+    showToast(reward.points ? `${sent}，${reward.message}` : sent)
+    if (!reward.points) setTimeout(() => showToast(reward.message), 2200)
   } catch {
     showToast('沒有送出去，請確認網路後再按一次')
   } finally {
@@ -185,12 +240,33 @@ watch(collapsed, async () => {
 
 onMounted(async () => {
   map.value = createMap(mapEl.value!, { zoom: 16 })
-  const [b, f, meta] = await Promise.all([loadBins(), loadFillLevels(), loadMeta()])
+  const [b, f, meta, g] = await Promise.all([loadBins(), loadFillLevels(), loadMeta(), loadGrid()])
   mock.value = isMock(meta)
   fills.value = new Map(f.map((x) => [x.id, x.fill]))
+  checkedDays.value = new Map(f.map((x) => [x.id, x.checkedDaysAgo ?? 0]))
+  gapCells.value = g.cells.filter((c) => c.gap > 0)
   bins.value = b
+  applyScan()
   locate()
 })
+
+/** 掃碼開啟：核對簽章；通過就把目標設成這一桶，並當作人就在桶旁邊 */
+function applyScan() {
+  const id = route.params.id as string | undefined
+  if (!id) {
+    scannedId.value = undefined
+    scanValid.value = undefined
+    return
+  }
+  const bin = bins.value.find((b) => b.id === id)
+  scannedId.value = id
+  scanValid.value = !!bin && verifyBin(id, route.query.s as string | undefined)
+  if (bin && scanValid.value) {
+    here.value = [bin.lat, bin.lng]
+    pickedId.value = id
+  }
+}
+watch(() => route.fullPath, applyScan)
 
 onBeforeUnmount(() => {
   clearTimeout(toastTimer)
@@ -206,12 +282,20 @@ onBeforeUnmount(() => {
     <header class="pointer-events-none absolute inset-x-0 top-0 z-[1001] flex items-start justify-between gap-2 p-3 md:p-4">
       <div class="pointer-events-auto flex items-center gap-2">
         <div class="rounded-[10px] bg-sign p-[3px] shadow-lg shadow-ink/20">
-          <div class="rounded-[7px] border-[1.5px] border-white/90 px-3 py-1.5 text-[15px] font-bold tracking-[0.08em] text-white">台北桶報局</div>
+          <div class="rounded-[7px] border-[1.5px] border-white/90 px-3 py-1.5 text-[15px] font-bold tracking-[0.08em] whitespace-nowrap text-white">台北桶報局</div>
         </div>
-        <span v-if="mock" class="rounded-full bg-white/90 px-2.5 py-1 text-xs text-mute shadow-sm backdrop-blur">模擬資料</span>
+        <span v-if="mock" class="hidden rounded-full bg-white/90 px-2.5 py-1 text-xs whitespace-nowrap text-mute shadow-sm backdrop-blur sm:inline">模擬資料</span>
+      </div>
+      <div
+        class="pointer-events-auto ml-auto flex items-baseline gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs whitespace-nowrap text-sign shadow-sm backdrop-blur"
+        :title="`已確認 ${points.confirmed} 點，待確認 ${points.pending} 點。示意功能，點數只存在這個瀏覽器`"
+      >
+        綠點
+        <span class="num text-base font-bold">{{ points.confirmed + points.pending }}</span>
+        <span class="text-[10px] text-mute">示意</span>
       </div>
       <div class="pointer-events-auto flex items-center gap-2">
-        <RouterLink to="/admin" class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
+        <RouterLink to="/admin" class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
         <button
           class="grid h-10 w-10 place-items-center rounded-full bg-white text-sign shadow-md transition active:scale-95"
           :aria-label="locateState === 'locating' ? '定位中' : '重新定位'"
@@ -236,7 +320,24 @@ onBeforeUnmount(() => {
       </button>
 
       <div class="overflow-y-auto px-4 pb-4 md:pt-4">
-        <p class="mb-2 text-xs text-mute">{{ locateText }}</p>
+        <div
+          v-if="scanValid === true && scannedId"
+          class="mb-3 flex items-center gap-3 rounded-[12px] border-2 border-sign bg-sign-soft px-3 py-2.5 text-sign"
+          role="status"
+        >
+          <svg viewBox="0 0 24 24" class="h-6 w-6 shrink-0" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10" stroke-linecap="round" />
+          </svg>
+          <p class="text-sm leading-snug">
+            已掃描垃圾桶 <span class="num text-base font-bold">{{ shortCode(scannedId) }}</span><br />
+            <span class="text-xs">請核對貼紙上的編號是否相同</span>
+          </p>
+        </div>
+        <div v-else-if="scanValid === false" class="mb-3 rounded-[12px] border-2 border-alert bg-[#fdecec] px-3 py-2.5 text-sm leading-snug text-[#a3262b]" role="alert">
+          <p class="font-bold">這張 QR Code 驗證失敗</p>
+          <p class="mt-0.5 text-xs">貼紙可能被替換過。我們不會在掃碼頁要求登入或輸入任何資料，請不要在可疑頁面填寫個人資料。</p>
+        </div>
+        <p v-else class="mb-2 text-xs text-mute">{{ locateText }}<span v-if="mock" class="sm:hidden">，目前顯示模擬資料</span></p>
 
         <!-- 路牌：最重要的資訊 -->
         <div v-if="target" class="rounded-[16px] bg-sign p-[5px] text-white shadow-lg shadow-sign/25">
@@ -252,9 +353,10 @@ onBeforeUnmount(() => {
                 <path d="M32 4 L54 30 H40 V60 H24 V30 H10 Z" fill="#ffffff" />
               </svg>
               <div class="min-w-0">
-                <p class="text-xs text-white/75">{{ pickedId ? '你選的垃圾桶' : '最近的垃圾桶' }}</p>
+                <p class="text-xs text-white/75">{{ isScanned(target.bin) ? '你正在這桶旁邊' : pickedId ? '你選的垃圾桶' : '最近的垃圾桶' }}</p>
                 <p class="truncate text-lg leading-snug font-bold">{{ target.bin.road }}</p>
-                <p class="mt-0.5 flex items-baseline gap-1.5">
+                <p v-if="target.meters < 15" class="mt-1 text-[28px] leading-tight font-bold">就在你旁邊</p>
+                <p v-else class="mt-0.5 flex items-baseline gap-1.5">
                   <span class="num text-[44px] leading-none font-bold">{{ Math.round(target.meters) }}</span>
                   <span class="text-sm">公尺</span>
                   <span class="ml-1 text-sm text-white/85">步行 {{ walkingMinutes(target.meters) }} 分鐘，往{{ compassWord(bearing) }}</span>
@@ -297,7 +399,7 @@ onBeforeUnmount(() => {
         <!-- 回報 -->
         <div v-if="target" class="mt-3 grid grid-cols-2 gap-2">
           <button
-            v-for="kind in (['full', 'missing'] as const)"
+            v-for="kind in (isScanned(target.bin) ? (['ok', 'full'] as const) : (['full', 'missing'] as const))"
             :key="kind"
             class="flex h-14 items-center justify-center gap-2 rounded-[12px] text-[15px] font-bold transition active:scale-[0.98] disabled:active:scale-100"
             :class="
@@ -305,7 +407,9 @@ onBeforeUnmount(() => {
                 ? 'bg-sign-soft text-sign'
                 : kind === 'full'
                   ? 'bg-truck text-ink shadow-[inset_0_-3px_0_rgb(0_0_0/0.12)]'
-                  : 'border-2 border-hair bg-white text-ink'
+                  : kind === 'ok'
+                    ? 'bg-sign text-white shadow-[inset_0_-3px_0_rgb(0_0_0/0.2)]'
+                    : 'border-2 border-hair bg-white text-ink'
             "
             :disabled="reported.has(keyOf(kind, target.bin)) || !!sending"
             @click="report(kind, target.bin)"
@@ -320,9 +424,60 @@ onBeforeUnmount(() => {
                   ? '送出中'
                   : kind === 'full'
                     ? '這桶滿了'
-                    : '找不到這桶'
+                    : kind === 'ok'
+                      ? '還可以丟'
+                      : '找不到這桶'
             }}
           </button>
+        </div>
+        <p v-if="target" class="mt-2 text-center text-xs text-mute">
+          <template v-if="isScanned(target.bin)">
+            回報哪一種狀態都是 <span class="num font-bold text-sign">+{{ POINTS.scan + (isStale(target.bin.id) ? POINTS.staleBonus : 0) }}</span> 綠點，照實回報就好
+          </template>
+          <template v-else>掃描垃圾桶上的 QR Code 回報，可以領綠點</template>
+        </p>
+
+        <!-- 巡桶任務：帶大家去資料最缺的地方 -->
+        <div v-show="!collapsed && (quests.staleBins.length || quests.desert)" class="mt-5">
+          <div class="mb-1 flex items-baseline justify-between">
+            <h2 class="text-sm font-bold">巡桶任務</h2>
+            <span class="text-xs text-mute">每天上限 {{ POINTS.dailyCap }} 點</span>
+          </div>
+          <ul class="divide-y divide-hair">
+            <li v-for="q in quests.staleBins" :key="q.id">
+              <button class="flex w-full items-center gap-3 py-2.5 text-left transition hover:bg-paper/60" @click="pick(q.id)">
+                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-truck text-ink" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10" cy="10" r="7" /><path d="M10 6v4l2.5 2" /></svg>
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-[15px]">{{ q.title }}</span>
+                  <span class="block text-xs text-mute">{{ q.detail }}，走過去掃碼確認</span>
+                </span>
+                <span class="shrink-0 text-right">
+                  <span class="num block text-base font-bold text-sign">+{{ q.reward }}</span>
+                  <span class="num text-xs text-mute">{{ Math.round(q.meters) }} 公尺</span>
+                </span>
+              </button>
+            </li>
+            <li v-if="quests.desert">
+              <button
+                class="flex w-full items-center gap-3 py-2.5 text-left transition hover:bg-paper/60"
+                @click="map?.flyTo([quests.desert.c.lat, quests.desert.c.lng], 17)"
+              >
+                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-alert text-white" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 17s5-4.5 5-8.5a5 5 0 0 0-10 0C5 12.5 10 17 10 17z" /><circle cx="10" cy="8.5" r="1.8" /></svg>
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-[15px]">這附近可能沒有垃圾桶</span>
+                  <span class="block text-xs text-mute">走到那裡確認，用下方按鈕回報</span>
+                </span>
+                <span class="shrink-0 text-right">
+                  <span class="num block text-base font-bold text-sign">+{{ POINTS.desert }}</span>
+                  <span class="num text-xs text-mute">{{ Math.round(quests.desert.meters) }} 公尺</span>
+                </span>
+              </button>
+            </li>
+          </ul>
         </div>
 
         <!-- 附近其他 -->

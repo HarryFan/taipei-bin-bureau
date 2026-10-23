@@ -32,6 +32,12 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 
 ---
 
+## 範圍凍結（10/23 12:40）
+
+功能到此為止，不再加新功能。剩下的時間只做：部署、換真實資料（拿得到的話）、README、印 QR 貼紙、彩排 Demo。
+
+已完成：市民端、市府戰情、全市模擬資料、QR 掃碼回報、巡桶任務、綠點示意。
+
 ## 1. 13:30 會議要決定
 
 - [ ] 確認題目切角：市民端（找桶、回報）＋市府端（沙漠地圖、清運）
@@ -153,6 +159,8 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 - [ ] 15:00 凍結功能，彩排 2 分鐘 Demo
 - [ ] **15:45 前提交**：作品名稱、作品網址、GitHub 網址
 - [ ] 若要公開程式碼給票選者看，記得把 repo 改成 public（README 已用 MIT 授權）
+
+- [ ] 印 QR 貼紙：部署後打開 `<網址>/#/qr` 列印（貼紙上的網址會是部署網址，**要部署後再印**）
 
 ### Demo 備案
 - Demo 前：儀表板「市民回報」旁的「清空」可以清掉測試回報（離線模式才有）

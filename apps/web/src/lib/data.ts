@@ -97,7 +97,13 @@ export async function loadFillLevels(): Promise<FillLevel[]> {
   // 離線模式也模擬 API 的行為：被回報「滿了」的桶直接視為 100%
   const [base, local] = [await getJson<FillLevel[]>('fill_levels.json'), readLocal()]
   const full = new Map(local.filter((r) => r.kind === 'full' && r.binId).map((r) => [r.binId!, r.createdAt]))
-  return base.map((f) => (full.has(f.id) ? { ...f, fill: 1, updatedAt: full.get(f.id)! } : f))
+  const checked = new Set(local.filter((r) => r.binId).map((r) => r.binId!))
+  return base.map((f) => ({
+    ...f,
+    ...(full.has(f.id) ? { fill: 1, updatedAt: full.get(f.id)! } : {}),
+    // 只要有人回報過這桶，就算今天有人確認
+    ...(checked.has(f.id) ? { checkedDaysAgo: 0 } : {}),
+  }))
 }
 
 export async function submitReport(input: Omit<Report, 'id' | 'createdAt'>): Promise<Report> {

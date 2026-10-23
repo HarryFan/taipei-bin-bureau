@@ -31,7 +31,7 @@ createServer(async (req, res) => {
     if (pathname === '/api/reports' && req.method === 'GET') return send(res, 200, reports)
     if (pathname === '/api/reports' && req.method === 'POST') {
       const r = await readBody(req)
-      if (!['full', 'missing', 'need'].includes(r.kind)) return send(res, 400, { error: 'kind 不正確' })
+      if (!['full', 'missing', 'need', 'ok'].includes(r.kind)) return send(res, 400, { error: 'kind 不正確' })
       reports.unshift(r)
       return send(res, 201, r)
     }
@@ -40,7 +40,12 @@ createServer(async (req, res) => {
     if (pathname === '/api/fill-levels') {
       const base = JSON.parse(await readFile(FILL_PATH, 'utf8'))
       const full = new Set(reports.filter((r) => r.kind === 'full' && r.binId).map((r) => r.binId))
-      return send(res, 200, base.map((f) => (full.has(f.id) ? { ...f, fill: 1 } : f)))
+      const checked = new Set(reports.filter((r) => r.binId).map((r) => r.binId))
+      return send(
+        res,
+        200,
+        base.map((f) => ({ ...f, ...(full.has(f.id) ? { fill: 1 } : {}), ...(checked.has(f.id) ? { checkedDaysAgo: 0 } : {}) })),
+      )
     }
 
     send(res, 404, { error: 'not found' })

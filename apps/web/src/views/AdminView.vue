@@ -55,6 +55,9 @@ const svgRenderer = L.svg({ padding: 0.5 })
 
 // ---------- 衍生資料 ----------
 const fillById = computed(() => new Map(fills.value.map((f) => [f.id, f.fill])))
+const checkedById = computed(() => new Map(fills.value.map((f) => [f.id, f.checkedDaysAgo])))
+/** 超過 14 天沒人確認的桶：資料新鮮度的指標，也是巡桶任務的目標 */
+const staleCount = computed(() => fills.value.filter((f) => (f.checkedDaysAgo ?? 0) >= 14).length)
 const binById = computed(() => new Map(bins.value.map((b) => [b.id, b])))
 
 function nearestBin(lat: number, lng: number): Bin | undefined {
@@ -177,7 +180,7 @@ function drawBase() {
       fillColor: routeMode ? (due ? '#e5484d' : fill >= 0.5 ? '#c79400' : '#3f7a5c') : '#6f9a84',
       fillOpacity: routeMode ? 0.95 : 0.7,
     })
-      .bindTooltip(`${b.road}<br>${FILL_META[fillState(fill)].label}，${Math.round(fill * 100)}%`)
+      .bindTooltip(`${b.road}<br>${FILL_META[fillState(fill)].label}，${Math.round(fill * 100)}%<br>${checkedById.value.get(b.id) === 0 ? '今天有人確認' : `${checkedById.value.get(b.id) ?? '—'} 天前有人確認`}`)
       .addTo(baseLayer)
   }
 }
@@ -388,6 +391,7 @@ onBeforeUnmount(() => {
           {{ source === 'api' ? '即時連線' : '離線模式' }}
         </span>
         <time class="num text-lg text-night-mute">{{ now.toLocaleTimeString('zh-TW', { hour12: false }) }}</time>
+        <RouterLink to="/qr" class="rounded-full border border-night-line px-3 py-1.5 text-xs font-bold hover:bg-night-2">列印 QR</RouterLink>
         <RouterLink to="/" class="rounded-full bg-night-3 px-3 py-1.5 text-xs font-bold hover:bg-night-line">市民端</RouterLink>
       </div>
     </header>
@@ -416,6 +420,9 @@ onBeforeUnmount(() => {
           <template v-if="mode === 'gap'">
             <h2 class="text-base font-bold">哪裡最缺垃圾桶</h2>
             <p class="mt-1 text-sm leading-relaxed text-night-mute">人流和陳情多、垃圾桶少的地方。每格 {{ grid?.cellMeters ?? 250 }} 公尺見方，地圖上共 {{ bins.length }} 個垃圾桶點位。</p>
+            <p class="mt-2 text-sm leading-relaxed text-night-mute">
+              其中 <span class="num text-base font-semibold text-truck">{{ staleCount }}</span> 桶超過 14 天沒人確認，已列入市民端的巡桶任務。
+            </p>
             <div class="mt-3 flex items-center gap-2 text-xs text-night-mute">
               <span>缺口小</span>
               <span class="h-2 flex-1 rounded-full bg-gradient-to-r from-[#ffc72c] via-[#ff8a2a] to-[#e5484d]" />
