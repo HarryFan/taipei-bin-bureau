@@ -10,5 +10,7 @@ export const router = createRouter({
     { path: '/bin/:id', name: 'bin', component: CitizenView },
     { path: '/qr', name: 'qr', component: () => import('./views/QrSheetView.vue') },
     { path: '/admin', name: 'admin', component: () => import('./views/AdminView.vue') },
+    // 實驗：3D 城市戰情室（three.js 只在這一頁載入）
+    { path: '/3d', name: 'admin3d', component: () => import('./views/Admin3DView.vue') },
   ],
 })
