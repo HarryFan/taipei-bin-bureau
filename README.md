@@ -15,7 +15,7 @@
 | 前端框架 | Vue 3.5、TypeScript 5.9、Vite 7.3 | 單頁應用，`vue-tsc` 型別檢查 |
 | 路由 | Vue Router 4（hash 模式） | `/` 市民端、`/admin` 市府戰情、`/bin/:id` 掃碼回報、`/qr` 列印貼紙；hash 模式部署到任何靜態主機都不用設定轉址 |
 | 樣式 | Tailwind CSS 4.3 | 設計語彙「台灣道路指示牌 × 清潔隊垃圾車」，色彩定義在 `apps/web/src/style.css` 的 `@theme` |
-| 地圖 | Leaflet 1.9（canvas 繪製） | 底圖依序嘗試 CARTO → OpenStreetMap → 國土測繪中心，連不上或逾時 5 秒就自動換下一個 |
+| 地圖 | Leaflet 1.9（canvas 繪製） | 底圖以國土測繪中心為主、OpenStreetMap 備用，連不上或逾時 5 秒就自動換 |
 | 動畫 | GSAP 3.15 | 市府戰情的數字滾動；垃圾車沿路線行駛用 `requestAnimationFrame` |
 | QR Code | qrcode 1.5 | 產生貼紙；簽章與驗證目前在前端示意，正式版改由後端處理 |
 | 字型 | Chiron GoRound TC、Barlow Semi Condensed | 以 @fontsource 打包在專案內，現場沒網路也能顯示 |
@@ -107,7 +107,7 @@ npm run data:mock    # 重新產生模擬資料再建置
 
 ### 常見問題
 
-- **地圖只有點，沒有底圖**：底圖從 CARTO 線上載入，網路不通時會顯示「地圖底圖載入失敗，請檢查網路」。垃圾桶位置與功能不受影響。
+- **地圖只有點，沒有底圖**：底圖從國土測繪中心線上載入（備用 OpenStreetMap），網路不通時會顯示「地圖底圖載入失敗，請檢查網路」。垃圾桶位置與功能不受影響。
 - **`npm run data:build` 說找不到 Python**：安裝 Python 3.9 以上並加入 PATH，Windows 可以用 `py --version` 確認。
 - **畫面上寫「模擬資料」**：垃圾桶點位已是真實開放資料，但人流、陳情等需求資料與填滿率仍是模擬，見 [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) 第 3 節。
 - **port 被占用**：`npm run dev -- --port 5180` 換一個。
@@ -138,12 +138,12 @@ npm run data:mock    # 重新產生模擬資料再建置
 | 市民回報 | **模擬／Demo 現場產生** |
 | `data/mock/*` | **模擬資料**：全台北市 661 個垃圾桶點位、捷運站人流、公車站、陳情、商圈（`data/scripts/generate_mock.py` 產生，捷運站與商圈為約略座標，人流為假設量級） |
 
-地圖圖資：© OpenStreetMap contributors © CARTO
+地圖圖資：© 內政部國土測繪中心、© OpenStreetMap contributors
 
 ## 使用的開源套件與 AI 工具
 
 - 套件版本見上方「技術棧」
-- 底圖：CARTO Voyager / Dark Matter、OpenStreetMap、內政部國土測繪中心通用版電子地圖（依可用性自動切換）
+- 底圖：內政部國土測繪中心通用版電子地圖、OpenStreetMap（依可用性自動切換）
 - AI 工具：Claude（專案規劃與程式骨架）
 - TODO：其他成員使用的工具
 
