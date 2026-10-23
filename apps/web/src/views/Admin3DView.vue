@@ -237,7 +237,10 @@ onBeforeUnmount(() => {
       <div class="pointer-events-auto rounded-[12px] bg-sign p-[4px] shadow-lg">
         <div class="rounded-[9px] border-2 border-white/90 px-3 py-1.5 text-base font-bold tracking-[0.08em] text-white">台北桶報局</div>
       </div>
-      <div class="rounded-full bg-white/85 px-3 py-1 text-sm font-bold shadow backdrop-blur">市府戰情 3D</div>
+      <div class="rounded-[12px] bg-white/90 px-3.5 py-1.5 leading-tight shadow-lg backdrop-blur">
+        <div class="text-lg font-bold">3D 城市戰情室</div>
+        <div class="text-xs text-mute">市府端・內部使用</div>
+      </div>
       <span v-if="mock" class="rounded-full bg-white/70 px-2.5 py-0.5 text-xs text-mute">部分模擬資料</span>
     </div>
 
@@ -260,7 +263,7 @@ onBeforeUnmount(() => {
     <!-- 右上：切回 2D -->
     <div class="absolute top-4 right-4 flex gap-2">
       <RouterLink :to="{ path: '/admin', query: district ? { d: district } : {} }" class="rounded-full bg-white/90 px-3.5 py-2 text-sm font-bold shadow-lg backdrop-blur hover:bg-white">2D 戰情室</RouterLink>
-      <RouterLink to="/" class="rounded-full bg-ink px-3.5 py-2 text-sm font-bold text-white shadow-lg">市民端</RouterLink>
+      <RouterLink to="/" class="rounded-full bg-white/90 px-3.5 py-2 text-sm font-bold shadow-lg backdrop-blur hover:bg-white">市民端</RouterLink>
     </div>
 
     <!-- 左：面板 -->
