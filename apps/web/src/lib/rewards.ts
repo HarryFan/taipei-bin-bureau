@@ -10,6 +10,8 @@
  * 詳見 docs/REWARDS.md
  */
 
+import type { ReportKind } from '../types'
+
 export const POINTS = {
   scan: 5, // 掃碼回報一桶
   staleBonus: 5, // 這桶超過 STALE_DAYS 天沒人確認
@@ -30,7 +32,7 @@ export interface RewardEntry {
 }
 
 export interface ClaimInput {
-  kind: 'full' | 'missing' | 'ok' | 'need'
+  kind: ReportKind
   binId?: string
   scanned: boolean
   located: boolean

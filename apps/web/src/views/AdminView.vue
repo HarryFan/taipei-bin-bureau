@@ -32,8 +32,9 @@ import {
   type Dispatch,
 } from '../lib/dispatch'
 import { progressOf } from '../lib/tracking'
+import { advanceCase, FORWARD_UNITS, groupIssueCases, isIssue, issueReached, loadCaseStates, onLocalCasesChange, type CaseState, type IssueCase } from '../lib/cases'
 import { buildCases, districtScores, FAST_MIN } from '../lib/scoreboard'
-import { FILL_META, fillState, REPORT_COLOR, REPORT_LABEL, type Bin, type FillLevel, type GridCell, type GridData, type Report } from '../types'
+import { caseNo, FILL_META, fillState, REPORT_COLOR, REPORT_LABEL, type Bin, type FillLevel, type GridCell, type GridData, type Report } from '../types'
 
 type Mode = 'gap' | 'route'
 
@@ -43,7 +44,7 @@ const DISTRICTS = ['中正區', '大同區', '中山區', '松山區', '大安�
 const MAX_TRUCKS = 3
 const TRUCK_COLORS = ['#c79400', '#0a6fd6', '#c2185b']
 // 回報類型的文字色：types 的 REPORT_COLOR 偏亮，淺底上換成深一階
-const REPORT_TEXT: Record<Report['kind'], string> = { full: '#c62828', missing: '#56695f', need: '#8a6500', ok: '#0b5d3b' }
+const REPORT_TEXT: Record<Report['kind'], string> = { full: '#c62828', missing: '#56695f', need: '#8a6500', ok: '#0b5d3b', dirty: '#6d4c41', broken: '#5e35b1', other: '#455a64' }
 
 const routeQ = useRoute()
 const router = useRouter()
@@ -76,6 +77,7 @@ let pollTimer: ReturnType<typeof setInterval> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 let stopListening: (() => void) | undefined
 let stopDispatchListening: (() => void) | undefined
+let stopCasesListening: (() => void) | undefined
 let loaded = false
 const svgRenderer = L.svg({ padding: 0.5 })
 
@@ -279,16 +281,37 @@ const lonelyFullBins = computed(() => {
  * 同一桶、同一種狀態、同一趟處理中的回報合併成一個案件，顯示有幾位市民回報，
  * 清運完成後再有人回報就是新案件。
  */
+const caseStates = ref<CaseState[]>([])
+const issueCases = computed(() => groupIssueCases(visibleReports.value, caseStates.value))
+type FeedItem = { key: string; latest: Report; count: number; no: string; issue?: IssueCase }
 const cases = computed(() => {
-  const map = new Map<string, { key: string; latest: Report; count: number }>()
-  for (const r of visibleReports.value) {
+  const map = new Map<string, FeedItem>()
+  // 由舊到新累加，案件編號取第一筆回報；最後再依最新回報時間排序
+  for (const r of [...visibleReports.value].reverse()) {
+    if (isIssue(r.kind)) continue
     const key = r.binId ? `${r.binId}:${r.kind}:${r.kind === 'full' ? (progressOf(r, dispatches.value).dispatch?.id ?? 'open') : 'all'}` : r.id
     const c = map.get(key)
-    if (c) c.count++
-    else map.set(key, { key, latest: r, count: 1 })
+    if (c) {
+      c.count++
+      c.latest = r
+    } else map.set(key, { key, latest: r, count: 1, no: caseNo(r) })
   }
-  return [...map.values()]
+  const issues: FeedItem[] = issueCases.value.map((c) => ({ key: c.key, latest: c.latest, count: c.reports.length, no: c.no, issue: c }))
+  return [...map.values(), ...issues].sort((a, b) => b.latest.createdAt.localeCompare(a.latest.createdAt))
 })
+
+// ---------- 人工案件分流：確認 → 轉交 → 處理完成 ----------
+async function stepCase(key: string, step: CaseState['step'], extra: { unit?: string; photo?: string } = {}) {
+  await advanceCase(key, step, extra)
+  caseStates.value = await loadCaseStates()
+}
+async function finishCase(key: string, e?: Event) {
+  const input = e?.target as HTMLInputElement | undefined
+  const file = input?.files?.[0]
+  if (input) input.value = ''
+  await stepCase(key, 'done', file ? { photo: await compressPhoto(file) } : {})
+}
+const ISSUE_STEP_TEXT = ['待確認', '已確認', '已轉交', '已結案'] as const
 
 /** 各區處理時效（和公開成績單同一套算法） */
 const scoreByDistrict = computed(() => {
@@ -499,7 +522,8 @@ function flyTo(lat: number, lng: number, zoom = 17) {
 // ---------- 資料更新 ----------
 async function refresh() {
   try {
-    const [nextFills, nextReports, nextDispatches] = await Promise.all([loadFillLevels(), loadReports(), loadDispatches()])
+    const [nextFills, nextReports, nextDispatches, nextCases] = await Promise.all([loadFillLevels(), loadReports(), loadDispatches(), loadCaseStates()])
+    if (JSON.stringify(nextCases) !== JSON.stringify(caseStates.value)) caseStates.value = nextCases
     source.value = lastSource
     if (JSON.stringify(nextDispatches) !== JSON.stringify(dispatches.value)) dispatches.value = nextDispatches
     if (JSON.stringify(nextFills) !== JSON.stringify(fills.value)) fills.value = nextFills
@@ -576,6 +600,7 @@ onMounted(async () => {
   clockTimer = setInterval(() => (now.value = new Date()), 1000)
   stopListening = onLocalReportsChange(refresh)
   stopDispatchListening = onLocalDispatchChange(() => loadDispatches().then((d) => (dispatches.value = d)))
+  stopCasesListening = onLocalCasesChange(() => loadCaseStates().then((c) => (caseStates.value = c)))
 })
 
 onBeforeUnmount(() => {
@@ -583,6 +608,7 @@ onBeforeUnmount(() => {
   clearInterval(clockTimer)
   stopListening?.()
   stopDispatchListening?.()
+  stopCasesListening?.()
   stopTruck()
   gsap.killTweensOf(shown)
   map.value?.remove()
@@ -869,23 +895,41 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <TransitionGroup v-if="cases.length" tag="ol" name="feed" class="mt-3 max-h-80 overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
-            <li v-for="{ key, latest: r, count } in cases.slice(0, 30)" :key="key">
-              <button
-                class="flex w-full gap-3 rounded-[8px] px-2 py-2 text-left transition"
-                :class="freshIds.has(r.id) ? 'bg-night-3' : 'hover:bg-night-2'"
-                @click="flyTo(r.lat, r.lng)"
-              >
+            <li v-for="{ key, latest: r, count, no, issue } in cases.slice(0, 30)" :key="key" class="rounded-[8px]" :class="freshIds.has(r.id) ? 'bg-night-3' : ''">
+              <button class="flex w-full gap-3 rounded-[8px] px-2 py-2 text-left transition hover:bg-night-2" @click="flyTo(r.lat, r.lng)">
                 <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: REPORT_COLOR[r.kind] }" />
                 <span class="min-w-0 flex-1">
-                  <span class="flex items-center gap-2 text-sm font-bold" :style="{ color: REPORT_TEXT[r.kind] }">
-                    {{ REPORT_LABEL[r.kind] }}
-                    <span v-if="reportStatus(r)" class="rounded-full px-2 py-px text-[11px] font-bold" :class="reportStatus(r)!.cls">{{ reportStatus(r)!.text }}</span>
-                    <span v-if="count > 1" class="num ml-auto rounded-full bg-night-3 px-2 py-px text-[11px] font-bold text-night-text" :title="'同一桶的回報已合併成一個案件'">{{ count }} 人回報</span>
+                  <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold" :style="{ color: REPORT_TEXT[r.kind] }">
+                    <span class="whitespace-nowrap">{{ REPORT_LABEL[r.kind] }}</span>
+                    <span v-if="reportStatus(r)" class="whitespace-nowrap rounded-full px-2 py-px text-[11px] font-bold" :class="reportStatus(r)!.cls">{{ reportStatus(r)!.text }}</span>
+                    <span
+                      v-if="issue"
+                      class="whitespace-nowrap rounded-full px-2 py-px text-[11px] font-bold"
+                      :class="issueReached(issue) === 3 ? 'bg-ok/12 text-ok' : issueReached(issue) === 0 ? 'bg-alert/12 text-alert-ink' : 'bg-truck/20 text-truck-ink'"
+                    >{{ ISSUE_STEP_TEXT[issueReached(issue)] }}{{ issue.state?.unit && issueReached(issue) >= 2 ? ` · ${issue.state.unit}` : '' }}</span>
+                    <span v-if="count > 1" class="num ml-auto rounded-full bg-night-3 px-2 py-px text-[11px] font-bold text-night-text" :title="'同一個問題的回報已合併成一個案件'">{{ count }} 人回報</span>
                   </span>
-                  <span class="block truncate text-xs text-night-mute">{{ placeOf(r) }}</span>
+                  <span class="block truncate text-xs text-night-mute"><span class="num">{{ no }}</span> · {{ placeOf(r) }}</span>
+                  <span v-if="r.note" class="mt-0.5 block text-xs text-night-text">「{{ r.note }}」</span>
                 </span>
+                <img v-if="r.photo" :src="r.photo" alt="市民回報照片" class="h-10 w-12 shrink-0 rounded-[6px] object-cover" />
                 <time class="num shrink-0 text-sm text-night-mute">{{ timeFmt(r.createdAt) }}</time>
               </button>
+              <!-- 人工分流：管理端確認後轉交 -->
+              <div v-if="issue && issueReached(issue) < 3" class="flex flex-wrap items-center gap-1.5 px-2 pb-2 pl-7">
+                <button v-if="issueReached(issue) === 0" class="rounded-full bg-sign px-3 py-1 text-xs font-bold text-white" @click="stepCase(issue.key, 'confirmed')">確認受理</button>
+                <template v-else-if="issueReached(issue) === 1">
+                  <span class="text-xs text-night-mute">轉交給</span>
+                  <button v-for="u in FORWARD_UNITS" :key="u" class="rounded-full border border-night-line px-2.5 py-1 text-xs font-bold hover:bg-night-2" @click="stepCase(issue.key, 'forwarded', { unit: u })">{{ u }}</button>
+                </template>
+                <template v-else>
+                  <button class="rounded-full bg-ok px-3 py-1 text-xs font-bold text-white" @click="finishCase(issue.key)">處理完成</button>
+                  <label class="cursor-pointer rounded-full border border-night-line px-2.5 py-1 text-xs text-night-mute hover:text-night-text">
+                    拍照結案
+                    <input type="file" accept="image/*" capture="environment" class="sr-only" @change="finishCase(issue.key, $event)" />
+                  </label>
+                </template>
+              </div>
             </li>
           </TransitionGroup>
           <p v-else class="mt-3 rounded-[10px] border border-dashed border-night-line p-4 text-sm leading-relaxed text-night-mute">
