@@ -6,13 +6,14 @@ const PORT = Number(process.env.PORT ?? 8787)
 const FILL_PATH = new URL('../web/public/data/fill_levels.json', import.meta.url)
 const reports = []
 const dispatches = []
+const cases = new Map()
 
 function send(res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,OPTIONS',
   })
   res.end(body === undefined ? '' : JSON.stringify(body))
 }
@@ -32,9 +33,22 @@ createServer(async (req, res) => {
     if (pathname === '/api/reports' && req.method === 'GET') return send(res, 200, reports)
     if (pathname === '/api/reports' && req.method === 'POST') {
       const r = await readBody(req)
-      if (!['full', 'missing', 'need', 'ok'].includes(r.kind)) return send(res, 400, { error: 'kind 不正確' })
+      if (!['full', 'missing', 'need', 'ok', 'dirty', 'broken', 'other'].includes(r.kind)) return send(res, 400, { error: 'kind 不正確' })
+      if (r.note !== undefined) r.note = String(r.note).slice(0, 100)
+      if (r.photo !== undefined && !(typeof r.photo === 'string' && r.photo.startsWith('data:image/') && r.photo.length < 400_000)) delete r.photo
       reports.unshift(r)
       return send(res, 201, r)
+    }
+
+    // 人工案件分流：確認、轉交、處理完成
+    if (pathname === '/api/cases' && req.method === 'GET') return send(res, 200, [...cases.values()])
+    const cm = pathname.match(/^\/api\/cases\/([^/]+)$/)
+    if (cm && req.method === 'PUT') {
+      const c = await readBody(req)
+      if (!['confirmed', 'forwarded', 'done'].includes(c.step)) return send(res, 400, { error: 'step 不正確' })
+      c.key = decodeURIComponent(cm[1])
+      cases.set(c.key, c)
+      return send(res, 200, c)
     }
 
     // 派車紀錄：出發時新增，返隊時補上 returnedAt

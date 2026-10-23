@@ -98,12 +98,14 @@ gh repo create taipei-bin-bureau --private --source=. --remote=origin --push
 | GET | `/api/health` | `{ "ok": true }` |
 | GET | `/api/fill-levels` | `[{ "id": "bin-0000", "fill": 0.82, "updatedAt": "ISO 時間" }]` |
 | GET | `/api/reports` | 回報陣列，新的在前 |
-| POST | `/api/reports` | 收 `{ id, kind, lat, lng, binId?, createdAt }`，回 201 |
+| POST | `/api/reports` | 收 `{ id, kind, lat, lng, binId?, createdAt, note?, photo? }`，回 201 |
+| GET | `/api/cases` | 人工分流案件狀態陣列 |
+| PUT | `/api/cases/:key` | 收 `{ key, step: confirmed｜forwarded｜done, unit?, photo?, history[] }`，回 200 |
 | GET | `/api/dispatches` | 派車紀錄陣列，新的在前 |
 | POST | `/api/dispatches` | 收 `{ id, district, truck, stops[], km, estMin, departedAt }`，回 201 |
 | PATCH | `/api/dispatches/:id` | 收 `{ returnedAt?, photo? }`（返隊時間、清運完成照片 data URL），回 200 |
 
-- `kind` 只能是 `full`（滿了）、`missing`（不見了）、`need`（這裡需要一個）
+- `kind`：`full`（滿了）、`dirty`（周邊髒亂）、`broken`（損壞或無法使用）、`other`（其他）、`missing`（不見了）、`need`（這裡需要一個）、`ok`（狀況良好）；`note` 最多 100 字，`photo` 為 JPEG data URL
 - 被回報 `full` 的 `binId`，在 `/api/fill-levels` 要變成 `fill: 1`
 - CORS 開放前端的部署網域與 `http://localhost:5173`
 

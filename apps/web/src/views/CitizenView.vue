@@ -7,9 +7,10 @@ import { isMock, loadBins, loadFillLevels, loadGrid, loadMeta, loadReports, subm
 import { shortCode, verifyBin } from '../lib/qr'
 import { claim, POINTS, STALE_DAYS, totals } from '../lib/rewards'
 import { bearingDeg, compassWord, distanceMeters, walkingMinutes, type LatLng } from '../lib/geo'
-import { loadDispatches, onLocalDispatchChange, type Dispatch } from '../lib/dispatch'
+import { compressPhoto, loadDispatches, onLocalDispatchChange, type Dispatch } from '../lib/dispatch'
+import { caseOfReport, groupIssueCases, ISSUE_STEPS, issueReached, loadCaseStates, onLocalCasesChange, type CaseState } from '../lib/cases'
 import { badgeOf, myReports, nextBadge, progressOf, rememberReport, STEPS } from '../lib/tracking'
-import { FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type Report, type ReportKind } from '../types'
+import { caseNo, FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type Report, type ReportKind } from '../types'
 
 type LocateState = 'locating' | 'ok' | 'denied'
 
@@ -56,19 +57,34 @@ const now = ref(Date.now())
 const badge = computed(() => badgeOf(mine.value.length))
 const upcoming = computed(() => nextBadge(mine.value.length))
 const binById = computed(() => new Map(bins.value.map((b) => [b.id, b])))
-/** 追蹤最近一筆「滿了」的回報（24 小時內） */
+const caseStates = ref<CaseState[]>([])
+const issueCases = computed(() => groupIssueCases(allReports.value, caseStates.value))
+/**
+ * 追蹤最近一筆回報（24 小時內）。
+ * 「滿了」走派車流程（五步驟）；周邊髒亂、損壞、其他走人工分流（四步驟：已回報、已確認、已轉交、處理完成）。
+ */
+const TRACKABLE: ReportKind[] = ['full', 'dirty', 'broken', 'other']
 const tracked = computed(() => {
-  const r = mine.value.find((x) => x.kind === 'full' && x.binId && now.value - Date.parse(x.createdAt) < 86_400_000)
+  const r = mine.value.find((x) => TRACKABLE.includes(x.kind) && (x.kind !== 'full' || x.binId) && now.value - Date.parse(x.createdAt) < 86_400_000)
   if (!r) return undefined
-  return { report: r, bin: binById.value.get(r.binId!), progress: progressOf(r, dispatches.value, now.value) }
+  const bin = r.binId ? binById.value.get(r.binId) : undefined
+  if (r.kind === 'full') return { type: 'full' as const, report: r, bin, no: caseNo(r), progress: progressOf(r, dispatches.value, now.value) }
+  const c = caseOfReport(r.id, issueCases.value)
+  return { type: 'issue' as const, report: r, bin, no: c?.no ?? caseNo(r), issue: c, reached: issueReached(c) }
 })
 let trackTimer: ReturnType<typeof setInterval> | undefined
 let stopDispatchListen: (() => void) | undefined
+let stopCasesListen: (() => void) | undefined
 async function refreshTracking() {
   now.value = Date.now()
   loadReports().then((r) => (allReports.value = r)).catch(() => {})
+  if (!tracked.value) return
+  if (tracked.value.type === 'issue') {
+    caseStates.value = await loadCaseStates()
+    return
+  }
   // 清運完成後仍繼續更新一陣子，才收得到清潔隊補傳的照片
-  if (!tracked.value || (tracked.value.progress.reached >= 4 && tracked.value.progress.dispatch?.photo)) return
+  if (tracked.value.progress.reached >= 4 && tracked.value.progress.dispatch?.photo) return
   dispatches.value = await loadDispatches()
 }
 
@@ -246,13 +262,39 @@ function showToast(text: string) {
 
 const keyOf = (kind: ReportKind, bin?: Bin) => `${bin?.id ?? 'here'}:${kind}`
 
-async function report(kind: ReportKind, bin?: Bin) {
+// ---------- 四類問題都能報：描述與照片選填 ----------
+const showIssue = ref(false)
+const issueKind = ref<'dirty' | 'broken' | 'other'>('dirty')
+const issueNote = ref('')
+const issuePhoto = ref<string>()
+async function pickIssuePhoto(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    issuePhoto.value = await compressPhoto(file)
+  } catch {
+    showToast('讀不到這張照片，換一張試試')
+  }
+}
+async function sendIssue() {
+  await report(issueKind.value, target.value?.bin, { note: issueNote.value.trim() || undefined, photo: issuePhoto.value })
+  if (reported.value.has(keyOf(issueKind.value, target.value?.bin))) {
+    showIssue.value = false
+    issueNote.value = ''
+    issuePhoto.value = undefined
+  }
+}
+
+async function report(kind: ReportKind, bin?: Bin, extra: { note?: string; photo?: string } = {}) {
   const key = keyOf(kind, bin)
   if (sending.value || reported.value.has(key)) return
   sending.value = key
   try {
     const at: LatLng = bin ? [bin.lat, bin.lng] : here.value
-    const sent = await submitReport({ kind, lat: at[0], lng: at[1], binId: bin?.id })
+    const sent = await submitReport({ kind, lat: at[0], lng: at[1], binId: bin?.id, ...extra })
+    allReports.value = [sent, ...allReports.value]
     const before = badgeOf(mine.value.length)
     rememberReport({ id: sent.id, kind, binId: bin?.id, createdAt: sent.createdAt })
     mine.value = myReports()
@@ -315,6 +357,8 @@ onMounted(async () => {
   allReports.value = await loadReports().catch(() => [])
   trackTimer = setInterval(refreshTracking, 3000)
   stopDispatchListen = onLocalDispatchChange(refreshTracking)
+  caseStates.value = await loadCaseStates()
+  stopCasesListen = onLocalCasesChange(refreshTracking)
 })
 
 /** 掃碼開啟：核對簽章；通過就把目標設成這一桶，並當作人就在桶旁邊 */
@@ -338,6 +382,7 @@ watch(() => route.fullPath, applyScan)
 onBeforeUnmount(() => {
   clearInterval(trackTimer)
   stopDispatchListen?.()
+  stopCasesListen?.()
   clearTimeout(toastTimer)
   map.value?.remove()
 })
@@ -529,13 +574,85 @@ onBeforeUnmount(() => {
           <template v-else>掃描垃圾桶上的 QR Code 回報，可以領綠點</template>
         </p>
 
+        <!-- 其他問題：周邊髒亂、損壞、其他（描述與照片選填） -->
+        <div v-if="target" class="mt-2">
+          <button v-if="!showIssue" class="w-full rounded-[10px] py-2 text-sm text-sign underline underline-offset-4" @click="showIssue = true">回報其他問題（周邊髒亂、損壞…）</button>
+          <form v-else class="rounded-[14px] border-2 border-hair p-3" @submit.prevent="sendIssue">
+            <div class="flex items-baseline justify-between">
+              <p class="text-sm font-bold">回報其他問題</p>
+              <button type="button" class="text-xs text-mute" @click="showIssue = false">取消</button>
+            </div>
+            <div class="mt-2 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="問題類型">
+              <button
+                v-for="k in (['dirty', 'broken', 'other'] as const)"
+                :key="k"
+                type="button"
+                role="radio"
+                :aria-checked="issueKind === k"
+                class="rounded-[10px] border-2 px-1 py-2 text-xs font-bold"
+                :class="issueKind === k ? 'border-sign bg-sign-soft text-sign' : 'border-hair text-ink'"
+                @click="issueKind = k"
+              >{{ REPORT_LABEL[k] }}</button>
+            </div>
+            <textarea v-model="issueNote" maxlength="100" rows="2" placeholder="簡單描述（選填，最多 100 字）" class="mt-2 w-full resize-none rounded-[10px] border-2 border-hair px-3 py-2 text-sm outline-none focus:border-sign" />
+            <div class="mt-1 flex items-center gap-2">
+              <label class="cursor-pointer rounded-full border-2 border-hair px-3 py-1.5 text-xs font-bold">
+                {{ issuePhoto ? '換一張照片' : '加照片（選填）' }}
+                <input type="file" accept="image/*" capture="environment" class="sr-only" @change="pickIssuePhoto" />
+              </label>
+              <img v-if="issuePhoto" :src="issuePhoto" alt="要上傳的照片" class="h-10 w-14 rounded-[6px] object-cover" />
+              <button v-if="issuePhoto" type="button" class="text-xs text-mute" @click="issuePhoto = undefined">移除</button>
+            </div>
+            <p class="mt-1.5 text-[11px] leading-snug text-mute">照片請避免拍到路人臉孔、車牌等個人資訊。我們不要求登入，也不收集個資。</p>
+            <button type="submit" class="mt-2 h-11 w-full rounded-[10px] bg-sign text-sm font-bold text-white disabled:opacity-50" :disabled="!!sending">
+              {{ sending ? '送出中' : `送出「${REPORT_LABEL[issueKind]}」` }}
+            </button>
+          </form>
+        </div>
+
         <!-- 回報追蹤：像追外送一樣 -->
         <div v-if="tracked" class="mt-4 rounded-[16px] border-2 border-hair p-4" aria-live="polite">
           <div class="flex items-baseline justify-between gap-2">
             <h2 class="text-sm font-bold">你的回報進度</h2>
             <span class="num text-xs text-mute">{{ new Date(tracked.report.createdAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }) }} 回報</span>
           </div>
-          <p class="mt-0.5 truncate text-xs text-mute">{{ tracked.bin?.road ?? '垃圾桶' }}</p>
+          <p class="mt-0.5 truncate text-xs text-mute">
+            <span class="num font-bold text-ink">{{ tracked.no }}</span> · {{ REPORT_LABEL[tracked.report.kind] }} · {{ tracked.bin?.road ?? '目前位置' }}
+          </p>
+
+          <!-- 其他問題：人工分流四步驟 -->
+          <template v-if="tracked.type === 'issue'">
+            <ol class="mt-3 grid grid-cols-4 gap-1">
+              <li v-for="(st, i) in ISSUE_STEPS" :key="st.key" class="flex flex-col items-center text-center">
+                <span class="grid h-7 w-7 place-items-center rounded-full text-xs font-bold" :class="i <= tracked.reached ? 'bg-sign text-white' : i === tracked.reached + 1 ? 'bg-truck text-ink ring-4 ring-truck/30' : 'bg-paper text-mute'">
+                  <svg v-if="i <= tracked.reached" viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5" /></svg>
+                  <template v-else>{{ i + 1 }}</template>
+                </span>
+                <span class="mt-1.5 text-[11px] leading-tight" :class="i <= tracked.reached + 1 ? 'font-bold text-ink' : 'text-mute'">{{ st.title }}</span>
+              </li>
+            </ol>
+            <div class="mt-3 rounded-[10px] bg-paper px-3 py-2.5 text-sm">
+              <template v-if="tracked.reached === 3">
+                <p class="font-bold text-sign">處理完成</p>
+                <p class="mt-0.5 text-xs text-mute">{{ tracked.issue?.state?.unit }}已處理完成，謝謝你讓這個問題被看見。</p>
+                <img v-if="tracked.issue?.state?.photo" :src="tracked.issue.state.photo" alt="處理完成照片" class="mt-2 w-full rounded-[8px] object-cover" />
+              </template>
+              <template v-else-if="tracked.reached === 2">
+                <p class="font-bold">已轉交{{ tracked.issue?.state?.unit }}</p>
+                <p class="mt-0.5 text-xs text-mute">桶報局確認後已轉交負責單位處理。</p>
+              </template>
+              <template v-else-if="tracked.reached === 1">
+                <p class="font-bold">桶報局：「確認了！」</p>
+                <p class="mt-0.5 text-xs text-mute">正在判斷要轉交哪個單位。</p>
+              </template>
+              <template v-else>
+                <p class="font-bold">已送出，等待桶報局確認</p>
+                <p class="mt-0.5 text-xs text-mute">同一個問題有其他人回報，會合併成同一件處理<template v-if="(tracked.issue?.reports.length ?? 1) > 1">（目前 {{ tracked.issue!.reports.length }} 人回報）</template>。</p>
+              </template>
+            </div>
+          </template>
+
+          <template v-else>
           <ol class="mt-3 grid grid-cols-5 gap-1">
             <li v-for="(st, i) in STEPS" :key="st.key" class="flex flex-col items-center text-center">
               <span class="relative flex w-full items-center">
@@ -578,6 +695,7 @@ onBeforeUnmount(() => {
               <p class="mt-0.5 text-xs text-mute">戰情室已經收到，等清潔隊排入下一趟清運。</p>
             </template>
           </div>
+          </template>
           <button class="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border-2 border-sign py-2 text-sm font-bold text-sign transition active:scale-[0.99]" @click="share">
             <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M4 11v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5" /></svg>
             分享：我為台北做了一件小事
