@@ -25,3 +25,4 @@ output/
 
 # 會議逐字稿含隊友對話，只留本機不公開
 docs/meetings/*.srt
+.vercel
