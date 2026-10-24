@@ -10,7 +10,8 @@ import { bearingDeg, compassWord, distanceMeters, walkingMinutes, type LatLng } 
 import { compressPhoto, loadDispatches, onLocalDispatchChange, type Dispatch } from '../lib/dispatch'
 import { caseOfReport, groupIssueCases, ISSUE_STEPS, issueReached, loadCaseStates, onLocalCasesChange, type CaseState } from '../lib/cases'
 import { badgeOf, myReports, nextBadge, progressOf, rememberReport, STEPS } from '../lib/tracking'
-import { caseNo, FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type Report, type ReportKind } from '../types'
+import { caseNo, FILL_META, fillState, REPORT_LABEL, type Bin, type GridCell, type GridData, type Report, type ReportKind } from '../types'
+import type { City3D } from '../lib/city3d'
 
 type LocateState = 'locating' | 'ok' | 'denied'
 
@@ -329,6 +330,7 @@ watch([bins, fills], drawBins)
 watch([target, here], async () => {
   drawFocus()
   await nextTick()
+  sync3d()
   frame(animateNextFrame)
   animateNextFrame = false
 })
@@ -341,7 +343,40 @@ watch(bearing, (deg) => {
 watch(collapsed, async () => {
   await nextTick()
   frame(true)
+  sync3d()
 })
+
+// ---------- 3D 城市：和市府戰情室同一個場景，three.js 只在打開時才載入 ----------
+const show3d = ref(false)
+const stage3d = ref<HTMLElement>()
+let city: City3D | undefined
+let grid: GridData | undefined
+function sync3d() {
+  if (!city || !target.value) return
+  const t: LatLng = [target.value.bin.lat, target.value.bin.lng]
+  const mobile = innerWidth < 768
+  city.setInsetLeft(mobile ? 0 : (sheetEl.value?.offsetWidth ?? 0) + 32)
+  city.setInsetBottom(mobile ? (sheetEl.value?.offsetHeight ?? 0) : 0)
+  city.setWalk(here.value, t)
+  city.flyToPoints([here.value, t], 75, 2.6)
+}
+watch(show3d, async (on) => {
+  if (!on) {
+    city?.dispose()
+    city = undefined
+    return
+  }
+  const { City3D } = await import('../lib/city3d')
+  await nextTick()
+  if (!show3d.value || city || !stage3d.value || !grid) return
+  // 原點和戰情室一樣，光影範圍才會蓋住整個台北
+  city = new City3D(stage3d.value, { lat: 25.05, lng: 121.545 })
+  city.onPick = (b) => pick(b.id)
+  city.build(bins.value, grid)
+  city.updateBins(fills.value, 0.8)
+  sync3d()
+})
+watch(fills, (f) => city?.updateBins(f, 0.8))
 
 onMounted(async () => {
   map.value = createMap(mapEl.value!, { zoom: 16 })
@@ -350,6 +385,7 @@ onMounted(async () => {
   fills.value = new Map(f.map((x) => [x.id, x.fill]))
   checkedDays.value = new Map(f.map((x) => [x.id, x.checkedDaysAgo ?? 0]))
   gapCells.value = g.cells.filter((c) => c.gap > 0)
+  grid = g
   bins.value = b
   applyScan()
   locate()
@@ -385,12 +421,19 @@ onBeforeUnmount(() => {
   stopCasesListen?.()
   clearTimeout(toastTimer)
   map.value?.remove()
+  city?.dispose()
 })
 </script>
 
 <template>
   <div class="relative h-full overflow-hidden bg-paper">
     <div ref="mapEl" class="absolute inset-0" />
+    <!-- 3D 城市蓋在地圖上；isolate 讓 CSS2D 標籤的 z-index 不會蓋過面板 -->
+    <!-- z-[1000]：蓋過 Leaflet 的縮放鈕；面板同層但在後面，所以面板仍在上面 -->
+    <div v-if="show3d" class="absolute inset-0 isolate z-[1000] grid place-items-center bg-paper text-sm text-mute">
+      城市生成中…
+      <div ref="stage3d" class="absolute inset-0" />
+    </div>
 
     <!-- 頂部：品牌與工具 -->
     <header class="pointer-events-none absolute inset-x-0 top-0 z-[1001] flex items-start justify-between gap-2 p-3 md:p-4">
@@ -414,6 +457,9 @@ onBeforeUnmount(() => {
         >{{ badge.name }}</span>
       </div>
       <div class="pointer-events-auto flex items-center gap-2">
+        <button class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white" :aria-pressed="show3d" @click="show3d = !show3d">
+          {{ show3d ? '2D 地圖' : '3D 城市' }}
+        </button>
         <RouterLink to="/admin" class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
         <button
           class="grid h-10 w-10 place-items-center rounded-full bg-white text-sign shadow-md transition active:scale-95"
