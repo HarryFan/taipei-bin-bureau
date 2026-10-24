@@ -28,7 +28,7 @@ const avg = computed(() => (closed.value.length ? Math.round(closed.value.reduce
 const issues = computed(() => groupIssueCases(reports.value, caseStates.value))
 const issueDone = computed(() => issues.value.filter((c) => issueReached(c) === 3).length)
 /** 回報類型分布（7 天內） */
-const KINDS: ReportKind[] = ['full', 'dirty', 'broken', 'other', 'need', 'missing', 'ok']
+const KINDS: ReportKind[] = ['full', 'dirty', 'dumping', 'broken', 'other', 'need', 'missing', 'ok']
 const byKind = computed(() => {
   const weekAgo = Date.now() - 7 * 86_400_000
   const recent = reports.value.filter((r) => Date.parse(r.createdAt) >= weekAgo)

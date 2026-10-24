@@ -39,8 +39,9 @@ export interface GridData {
 /**
  * 回報類型。full／dirty／broken／other 是 Kyra 提案的「四類問題都能報」：
  * 垃圾桶已滿或溢出、周邊髒亂、損壞或無法使用、其他公共環境問題。
+ * dumping 是民眾建議加的「被丟家用垃圾」：只記錄這桶的狀況，不檢舉個人。
  */
-export type ReportKind = 'full' | 'missing' | 'need' | 'ok' | 'dirty' | 'broken' | 'other'
+export type ReportKind = 'full' | 'missing' | 'need' | 'ok' | 'dirty' | 'dumping' | 'broken' | 'other'
 
 export interface Report {
   id: string
@@ -56,7 +57,7 @@ export interface Report {
 }
 
 /** 市民可以回報的四類問題 */
-export const ISSUE_KINDS = ['full', 'dirty', 'broken', 'other'] as const
+export const ISSUE_KINDS = ['full', 'dirty', 'dumping', 'broken', 'other'] as const
 
 /** 案件編號：TBB-月日-四碼，由回報 id 算出，同一筆回報永遠是同一個編號 */
 export function caseNo(r: Pick<Report, 'id' | 'createdAt'>): string {
@@ -73,6 +74,7 @@ export const REPORT_LABEL: Record<ReportKind, string> = {
   need: '這裡需要一個',
   ok: '狀況良好',
   dirty: '周邊髒亂',
+  dumping: '被丟家用垃圾',
   broken: '損壞或無法使用',
   other: '其他環境問題',
 }
@@ -83,6 +85,7 @@ export const REPORT_COLOR: Record<ReportKind, string> = {
   need: '#ffc72c',
   ok: '#7fd6a4',
   dirty: '#a1887f',
+  dumping: '#d4843a',
   broken: '#9575cd',
   other: '#78909c',
 }

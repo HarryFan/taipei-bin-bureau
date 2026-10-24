@@ -126,6 +126,25 @@ export async function submitReport(input: Omit<Report, 'id' | 'createdAt'>): Pro
   return report
 }
 
+/** 回報後補一張照片：讓戰情室能查核桶的實際狀況，避免誤報或惡搞 */
+export async function attachReportPhoto(id: string, photo: string): Promise<void> {
+  if (API) {
+    try {
+      await api(`/api/reports/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photo }),
+      })
+      lastSource = 'api'
+      return
+    } catch {
+      /* 退回本機儲存 */
+    }
+  }
+  lastSource = 'local'
+  writeLocal(readLocal().map((r) => (r.id === id ? { ...r, photo } : r)))
+}
+
 export async function loadReports(): Promise<Report[]> {
   if (API) {
     try {

@@ -42,7 +42,7 @@ export const ISSUE_STEPS = [
   { key: 'done', title: '處理完成' },
 ] as const
 
-export const isIssue = (k: ReportKind) => k === 'dirty' || k === 'broken' || k === 'other'
+export const isIssue = (k: ReportKind) => k === 'dirty' || k === 'dumping' || k === 'broken' || k === 'other'
 
 function readLocal(): CaseState[] {
   try {
@@ -106,7 +106,7 @@ export function onLocalCasesChange(cb: () => void): () => void {
   return () => removeEventListener('storage', h)
 }
 
-/** 把三類問題的回報合併成案件：同一桶（或同一地點）、同一類、還沒結案的回報算同一件 */
+/** 把這幾類問題的回報合併成案件：同一桶（或同一地點）、同一類、還沒結案的回報算同一件 */
 export function groupIssueCases(reports: Report[], states: CaseState[]): IssueCase[] {
   const byKey = new Map(states.map((s) => [s.key, s]))
   const open = new Map<string, IssueCase>()

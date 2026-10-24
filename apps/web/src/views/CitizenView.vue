@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import L from 'leaflet'
 import { createMap, TAIPEI } from '../lib/map'
 import { useRoute } from 'vue-router'
-import { isMock, loadBins, loadFillLevels, loadGrid, loadMeta, loadReports, submitReport } from '../lib/data'
+import { attachReportPhoto, isMock, loadBins, loadFillLevels, loadGrid, loadMeta, loadReports, submitReport } from '../lib/data'
 import { shortCode, verifyBin } from '../lib/qr'
 import { claim, POINTS, STALE_DAYS, totals } from '../lib/rewards'
 import { bearingDeg, compassWord, distanceMeters, walkingMinutes, type LatLng } from '../lib/geo'
@@ -64,7 +64,7 @@ const issueCases = computed(() => groupIssueCases(allReports.value, caseStates.v
  * 追蹤最近一筆回報（24 小時內）。
  * 「滿了」走派車流程（五步驟）；周邊髒亂、損壞、其他走人工分流（四步驟：已回報、已確認、已轉交、處理完成）。
  */
-const TRACKABLE: ReportKind[] = ['full', 'dirty', 'broken', 'other']
+const TRACKABLE: ReportKind[] = ['full', 'dirty', 'dumping', 'broken', 'other']
 const tracked = computed(() => {
   const r = mine.value.find((x) => TRACKABLE.includes(x.kind) && (x.kind !== 'full' || x.binId) && now.value - Date.parse(x.createdAt) < 86_400_000)
   if (!r) return undefined
@@ -265,7 +265,7 @@ const keyOf = (kind: ReportKind, bin?: Bin) => `${bin?.id ?? 'here'}:${kind}`
 
 // ---------- 四類問題都能報：描述與照片選填 ----------
 const showIssue = ref(false)
-const issueKind = ref<'dirty' | 'broken' | 'other'>('dirty')
+const issueKind = ref<'dirty' | 'dumping' | 'broken' | 'other'>('dirty')
 const issueNote = ref('')
 const issuePhoto = ref<string>()
 async function pickIssuePhoto(e: Event) {
@@ -277,6 +277,28 @@ async function pickIssuePhoto(e: Event) {
     issuePhoto.value = await compressPhoto(file)
   } catch {
     showToast('讀不到這張照片，換一張試試')
+  }
+}
+// 回報後補一張照片：給戰情室查核桶的實際狀況，避免誤報或惡搞
+const addingPhoto = ref(false)
+const trackedPhoto = computed(() => (tracked.value ? allReports.value.find((r) => r.id === tracked.value!.report.id)?.photo : undefined))
+const trackedDone = computed(() => (tracked.value?.type === 'full' ? tracked.value.progress.reached === 4 : tracked.value?.reached === 3))
+async function pickTrackedPhoto(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !tracked.value) return
+  const id = tracked.value.report.id
+  addingPhoto.value = true
+  try {
+    const photo = await compressPhoto(file)
+    await attachReportPhoto(id, photo)
+    allReports.value = allReports.value.map((r) => (r.id === id ? { ...r, photo } : r))
+    showToast('照片已補上，戰情室查核時會看到')
+  } catch {
+    showToast('讀不到這張照片，換一張試試')
+  } finally {
+    addingPhoto.value = false
   }
 }
 async function sendIssue() {
@@ -657,9 +679,9 @@ onBeforeUnmount(() => {
               <p class="text-sm font-bold">回報其他問題</p>
               <button type="button" class="text-xs text-mute" @click="showIssue = false">取消</button>
             </div>
-            <div class="mt-2 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="問題類型">
+            <div class="mt-2 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="問題類型">
               <button
-                v-for="k in (['dirty', 'broken', 'other'] as const)"
+                v-for="k in (['dirty', 'dumping', 'broken', 'other'] as const)"
                 :key="k"
                 type="button"
                 role="radio"
@@ -678,6 +700,7 @@ onBeforeUnmount(() => {
               <img v-if="issuePhoto" :src="issuePhoto" alt="要上傳的照片" class="h-10 w-14 rounded-[6px] object-cover" />
               <button v-if="issuePhoto" type="button" class="text-xs text-mute" @click="issuePhoto = undefined">移除</button>
             </div>
+            <p v-if="issueKind === 'dumping'" class="mt-1.5 text-[11px] leading-snug text-mute">只記錄這桶常被丟家用垃圾，讓環保局加強巡查；要檢舉特定的人，請改用環保局的檢舉管道。</p>
             <p class="mt-1.5 text-[11px] leading-snug text-mute">照片請避免拍到路人臉孔、車牌等個人資訊。我們不要求登入，也不收集個資。</p>
             <button type="submit" class="mt-2 h-11 w-full rounded-[10px] bg-sign text-sm font-bold text-white disabled:opacity-50" :disabled="!!sending">
               {{ sending ? '送出中' : `送出「${REPORT_LABEL[issueKind]}」` }}
@@ -771,6 +794,16 @@ onBeforeUnmount(() => {
             </template>
           </div>
           </template>
+          <!-- 補一張照片：查核用，選填 -->
+          <div v-if="trackedPhoto" class="mt-3 flex items-center gap-2 text-xs text-mute">
+            <img :src="trackedPhoto" alt="你附上的照片" class="h-10 w-14 rounded-[6px] object-cover" />
+            <span>已附照片，戰情室查核時會看到</span>
+          </div>
+          <label v-else-if="!trackedDone" class="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-dashed border-hair py-2 text-sm font-bold text-ink transition hover:border-sign" :class="addingPhoto && 'pointer-events-none opacity-50'">
+            <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a1 1 0 0 1 1-1h2.5l1.5-2h4l1.5 2H16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" /><circle cx="10" cy="11" r="3" /></svg>
+            {{ addingPhoto ? '上傳中' : '補一張照片（選填，幫助查核）' }}
+            <input type="file" accept="image/*" capture="environment" class="sr-only" :disabled="addingPhoto" @change="pickTrackedPhoto" />
+          </label>
           <button class="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border-2 border-sign py-2 text-sm font-bold text-sign transition active:scale-[0.99]" @click="share">
             <svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13V3M6 7l4-4 4 4M4 11v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5" /></svg>
             分享：我為台北做了一件小事

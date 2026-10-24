@@ -56,7 +56,7 @@ export function seedDemo(bins: Bin[]) {
   rep(b2, 'full', 33)
   rep(b3, 'full', 6)
   // 其他三類問題：人工分流的不同階段
-  const dirty = rep(b4, 'dirty', 50, '垃圾桶旁邊被放了一袋家庭垃圾')
+  const dirty = rep(b4, 'dumping', 50, '垃圾桶旁邊被放了一袋家庭垃圾')
   const broken = rep(b5, 'broken', 70, '桶蓋卡住打不開')
   const other = others[0] ? rep(others[0], 'other', 120, '附近人行道有碎玻璃') : undefined
   if (others[1]) rep(others[1], 'dirty', 12, '桶口周圍有飲料潑灑')

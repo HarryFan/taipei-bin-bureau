@@ -45,7 +45,7 @@ const DISTRICTS = ['中正區', '大同區', '中山區', '松山區', '大安�
 const MAX_TRUCKS = 3
 const TRUCK_COLORS = ['#c79400', '#0a6fd6', '#c2185b']
 // 回報類型的文字色：types 的 REPORT_COLOR 偏亮，淺底上換成深一階
-const REPORT_TEXT: Record<Report['kind'], string> = { full: '#c62828', missing: '#56695f', need: '#8a6500', ok: '#0b5d3b', dirty: '#6d4c41', broken: '#5e35b1', other: '#455a64' }
+const REPORT_TEXT: Record<Report['kind'], string> = { full: '#c62828', missing: '#56695f', need: '#8a6500', ok: '#0b5d3b', dirty: '#6d4c41', dumping: '#9a4f12', broken: '#5e35b1', other: '#455a64' }
 
 const routeQ = useRoute()
 const router = useRouter()

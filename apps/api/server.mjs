@@ -33,11 +33,21 @@ createServer(async (req, res) => {
     if (pathname === '/api/reports' && req.method === 'GET') return send(res, 200, reports)
     if (pathname === '/api/reports' && req.method === 'POST') {
       const r = await readBody(req)
-      if (!['full', 'missing', 'need', 'ok', 'dirty', 'broken', 'other'].includes(r.kind)) return send(res, 400, { error: 'kind 不正確' })
+      if (!['full', 'missing', 'need', 'ok', 'dirty', 'dumping', 'broken', 'other'].includes(r.kind)) return send(res, 400, { error: 'kind 不正確' })
       if (r.note !== undefined) r.note = String(r.note).slice(0, 100)
       if (r.photo !== undefined && !(typeof r.photo === 'string' && r.photo.startsWith('data:image/') && r.photo.length < 400_000)) delete r.photo
       reports.unshift(r)
       return send(res, 201, r)
+    }
+    // 回報後補一張照片（查核用）
+    const rm = pathname.match(/^\/api\/reports\/([^/]+)$/)
+    if (rm && req.method === 'PATCH') {
+      const r = reports.find((x) => x.id === decodeURIComponent(rm[1]))
+      if (!r) return send(res, 404, { error: '找不到這筆回報' })
+      const body = await readBody(req)
+      if (!(typeof body.photo === 'string' && body.photo.startsWith('data:image/') && body.photo.length < 400_000)) return send(res, 400, { error: 'photo 不正確' })
+      r.photo = body.photo
+      return send(res, 200, r)
     }
 
     // 人工案件分流：確認、轉交、處理完成
