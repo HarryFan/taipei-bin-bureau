@@ -378,8 +378,28 @@ watch(show3d, async (on) => {
 })
 watch(fills, (f) => city?.updateBins(f, 0.8))
 
+// 轉橫向、拉視窗、手機版面板切成桌機側欄時，Leaflet 不會自己重算尺寸，會留下灰邊
+let resizeObs: ResizeObserver | undefined
+let resizeRaf = 0
+let lastWidth = 0
+
 onMounted(async () => {
   map.value = createMap(mapEl.value!, { zoom: 16 })
+  lastWidth = mapEl.value!.clientWidth
+  resizeObs = new ResizeObserver(() => {
+    cancelAnimationFrame(resizeRaf)
+    resizeRaf = requestAnimationFrame(() => {
+      map.value?.invalidateSize({ pan: false })
+      // 只有寬度變了（轉向、拉視窗）才重新框景；手機網址列伸縮只改高度，不要打斷使用者拖曳
+      const w = mapEl.value?.clientWidth ?? 0
+      if (w !== lastWidth) {
+        lastWidth = w
+        frame()
+        sync3d()
+      }
+    })
+  })
+  resizeObs.observe(mapEl.value!)
   const [b, f, meta, g] = await Promise.all([loadBins(), loadFillLevels(), loadMeta(), loadGrid()])
   mock.value = isMock(meta)
   fills.value = new Map(f.map((x) => [x.id, x.fill]))
@@ -420,6 +440,8 @@ onBeforeUnmount(() => {
   stopDispatchListen?.()
   stopCasesListen?.()
   clearTimeout(toastTimer)
+  resizeObs?.disconnect()
+  cancelAnimationFrame(resizeRaf)
   map.value?.remove()
   city?.dispose()
 })
@@ -436,7 +458,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 頂部：品牌與工具 -->
-    <header class="pointer-events-none absolute inset-x-0 top-0 z-[1001] flex items-start justify-between gap-2 p-3 md:p-4">
+    <header class="pointer-events-none absolute inset-x-0 top-0 z-[1001] flex items-start justify-between gap-2 pr-[max(0.75rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 md:p-4">
       <div class="pointer-events-auto flex items-center gap-2">
         <div class="rounded-[10px] bg-sign p-[3px] shadow-lg shadow-ink/20">
           <div class="rounded-[7px] border-[1.5px] border-white/90 px-3 py-1.5 text-[15px] font-bold tracking-[0.08em] whitespace-nowrap text-white">台北桶報局</div>
@@ -444,23 +466,24 @@ onBeforeUnmount(() => {
         <span v-if="mock" class="hidden rounded-full bg-white/90 px-2.5 py-1 text-xs whitespace-nowrap text-mute shadow-sm backdrop-blur sm:inline">模擬資料</span>
       </div>
       <div
-        class="pointer-events-auto ml-auto flex items-baseline gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs whitespace-nowrap text-sign shadow-sm backdrop-blur"
+        class="pointer-events-auto ml-auto flex min-w-0 items-baseline gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs whitespace-nowrap text-sign shadow-sm backdrop-blur"
         :title="`已確認 ${points.confirmed} 點，待確認 ${points.pending} 點。示意功能，點數只存在這個瀏覽器`"
       >
         綠點
         <span class="num text-base font-bold">{{ points.confirmed + points.pending }}</span>
-        <span class="text-[10px] text-mute">示意</span>
+        <span class="hidden text-[10px] text-mute sm:inline">示意</span>
         <span
           v-if="badge"
-          class="ml-1 rounded-full bg-truck px-2 py-0.5 text-[11px] font-bold text-ink"
+          class="ml-1 hidden truncate rounded-full min-[360px]:inline bg-truck px-2 py-0.5 text-[11px] font-bold text-ink"
           :title="`已回報 ${mine.length} 次。${badge.note}${upcoming ? `；再 ${upcoming.min - mine.length} 次升級「${upcoming.name}」` : ''}`"
         >{{ badge.name }}</span>
       </div>
-      <div class="pointer-events-auto flex items-center gap-2">
-        <button class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white" :aria-pressed="show3d" @click="show3d = !show3d">
+      <div class="pointer-events-auto flex shrink-0 items-center gap-2">
+        <button class="inline-flex h-10 items-center rounded-full bg-white/90 px-3.5 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white" :aria-pressed="show3d" @click="show3d = !show3d">
           {{ show3d ? '2D 地圖' : '3D 城市' }}
         </button>
-        <RouterLink to="/admin" class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
+        <!-- 手機頂列放不下，改放在面板最下方 -->
+        <RouterLink to="/admin" class="hidden h-10 sm:inline-flex items-center rounded-full bg-white/90 px-3.5 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
         <button
           class="grid h-10 w-10 place-items-center rounded-full bg-white text-sign shadow-md transition active:scale-95"
           :aria-label="locateState === 'locating' ? '定位中' : '重新定位'"
@@ -480,11 +503,17 @@ onBeforeUnmount(() => {
       ref="sheetEl"
       class="absolute inset-x-0 bottom-0 z-[1000] flex max-h-[64%] flex-col rounded-t-[22px] bg-white shadow-[0_-12px_40px_rgb(16_37_28/0.18)] md:inset-x-auto md:top-20 md:bottom-4 md:left-4 md:max-h-none md:w-[400px] md:rounded-[22px]"
     >
-      <button class="flex shrink-0 justify-center pt-2.5 pb-1 md:hidden" :aria-label="collapsed ? '展開清單' : '收合清單'" @click="collapsed = !collapsed">
+      <button
+        class="flex h-8 shrink-0 items-center justify-center md:hidden"
+        :aria-label="collapsed ? '展開清單' : '收合清單'"
+        :aria-expanded="!collapsed"
+        @click="collapsed = !collapsed"
+      >
         <span class="h-1.5 w-10 rounded-full bg-hair" />
       </button>
 
-      <div class="overflow-y-auto px-4 pb-4 md:pt-4">
+      <!-- 手機收合：只留路牌，其餘藏起來讓出地圖；桌機側欄不受影響 -->
+      <div :class="collapsed && 'max-md:[&>*:not([data-keep])]:hidden'" class="min-h-0 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pt-4 md:pb-4">
         <div
           v-if="scanValid === true && scannedId"
           class="mb-3 flex items-center gap-3 rounded-[12px] border-2 border-sign bg-sign-soft px-3 py-2.5 text-sign"
@@ -514,7 +543,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 路牌：最重要的資訊 -->
-        <div v-if="target" class="rounded-[16px] bg-sign p-[5px] text-white shadow-lg shadow-sign/25">
+        <div v-if="target" data-keep class="rounded-[16px] bg-sign p-[5px] text-white shadow-lg shadow-sign/25">
           <div class="rounded-[12px] border-2 border-white/90 px-4 pt-3.5 pb-3">
             <div class="flex items-center gap-4">
               <svg
@@ -530,10 +559,10 @@ onBeforeUnmount(() => {
                 <p class="text-xs text-white/75">{{ isScanned(target.bin) ? '你正在這桶旁邊' : pickedId ? '你選的垃圾桶' : '最近的垃圾桶' }}</p>
                 <p class="truncate text-lg leading-snug font-bold">{{ target.bin.road }}</p>
                 <p v-if="target.meters < 15" class="mt-1 text-[28px] leading-tight font-bold">就在你旁邊</p>
-                <p v-else class="mt-0.5 flex items-baseline gap-1.5">
+                <p v-else class="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
                   <span class="num text-[44px] leading-none font-bold">{{ Math.round(target.meters) }}</span>
                   <span class="text-sm whitespace-nowrap">公尺</span>
-                  <span class="ml-1 text-sm text-white/85">步行 {{ walkingMinutes(target.meters) }} 分鐘，往{{ compassWord(bearing) }}</span>
+                  <span class="ml-1 text-sm whitespace-nowrap text-white/85">步行 {{ walkingMinutes(target.meters) }} 分鐘，往{{ compassWord(bearing) }}</span>
                 </p>
               </div>
             </div>
@@ -565,7 +594,7 @@ onBeforeUnmount(() => {
         >
           <span class="text-sm">
             這桶快滿了，下一個在
-            <span class="num font-bold">{{ Math.round(alternative.meters) }}</span> 公尺
+            <span class="whitespace-nowrap"><span class="num font-bold">{{ Math.round(alternative.meters) }}</span> 公尺</span>
           </span>
           <span class="shrink-0 text-sm font-bold">改去這桶</span>
         </button>
@@ -750,7 +779,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 巡桶任務：帶大家去資料最缺的地方 -->
-        <div v-show="!collapsed && (quests.staleBins.length || quests.desert)" class="mt-5">
+        <div v-show="quests.staleBins.length || quests.desert" class="mt-5">
           <div class="mb-1 flex items-baseline justify-between">
             <h2 class="text-sm font-bold">巡桶任務</h2>
             <span class="text-xs text-mute">每天上限 {{ POINTS.dailyCap }} 點</span>
@@ -793,7 +822,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 附近其他 -->
-        <div v-show="!collapsed" class="mt-5">
+        <div class="mt-5">
           <div class="mb-1 flex items-baseline justify-between">
             <h2 class="text-sm font-bold">附近還有</h2>
             <button v-if="pickedId" class="text-xs text-sign underline underline-offset-2" @click="pick(undefined)">回到最近的</button>
@@ -824,6 +853,8 @@ onBeforeUnmount(() => {
               {{ reported.has(keyOf('need')) ? '已回報，謝謝' : sending === keyOf('need') ? '送出中' : '回報這裡需要垃圾桶' }}
             </button>
           </div>
+
+          <RouterLink to="/admin" class="mt-4 flex h-11 items-center justify-center rounded-[10px] text-sm font-bold text-sign underline underline-offset-4 sm:hidden">前往市府戰情</RouterLink>
         </div>
       </div>
     </section>
@@ -832,7 +863,7 @@ onBeforeUnmount(() => {
       <div
         v-if="toast"
         role="status"
-        class="absolute top-16 left-1/2 z-[1100] -translate-x-1/2 rounded-full bg-ink px-4 py-2.5 text-sm whitespace-nowrap text-white shadow-xl md:top-20"
+        class="absolute top-16 left-1/2 z-[1100] w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full bg-ink px-4 py-2.5 text-center text-sm text-white shadow-xl md:top-20"
       >
         {{ toast }}
       </div>

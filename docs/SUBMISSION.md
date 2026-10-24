@@ -12,7 +12,7 @@
 
 | 要件 | 內容 | 負責 | 狀態 |
 | --- | --- | --- | --- |
-| MVP 網址 | Vercel 部署網址，手機與電腦都能開 | Harry | [ ] |
+| MVP 網址 | https://taipei-bin-bureau.vercel.app （手機與電腦都能開） | Harry | [x] |
 | GitHub | repo 設為 public（票選者要看得到），README 完整 | Harry | [ ] |
 | YouTube 影片 | 2–3 分鐘，見第 2 節；建議「公開」或「不公開（有連結可看）」，提交前先確認主辦單位規定 | Kyra／Harry | [ ] |
 | 未來需要的資源 | README「未來需要的資源」一節（局處、資料、經費、推廣） | Kyra | [ ] |

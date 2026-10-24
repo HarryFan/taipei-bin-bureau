@@ -32,6 +32,7 @@ import {
   type Dispatch,
 } from '../lib/dispatch'
 import { progressOf } from '../lib/tracking'
+import { clearDemo, seedDemo } from '../lib/demo'
 import { advanceCase, FORWARD_UNITS, groupIssueCases, isIssue, issueReached, loadCaseStates, onLocalCasesChange, type CaseState, type IssueCase } from '../lib/cases'
 import { buildCases, districtScores, FAST_MIN } from '../lib/scoreboard'
 import { caseNo, FILL_META, fillState, REPORT_COLOR, REPORT_LABEL, type Bin, type FillLevel, type GridCell, type GridData, type Report } from '../types'
@@ -560,8 +561,18 @@ function resetDemo() {
   }
   confirmReset.value = false
   clearLocalReports()
+  clearDemo()
   freshIds.value = new Set()
   refresh()
+}
+
+/** 錄影或 Demo 前：一鍵放好示範情境（西門町為主），並切到萬華區清運調度 */
+async function loadDemo() {
+  seedDemo(bins.value)
+  freshIds.value = new Set()
+  await refresh()
+  district.value = '萬華區'
+  mode.value = 'route'
 }
 
 function fitDistrict() {
@@ -885,6 +896,7 @@ onBeforeUnmount(() => {
         <section class="flex flex-col p-4 lg:min-h-0 lg:flex-1">
           <div class="flex items-baseline justify-between">
             <h2 class="text-base font-bold">市民回報</h2>
+            <button v-if="source === 'local'" class="ml-auto mr-3 text-xs text-sign underline underline-offset-2" title="放好幾筆示範回報、案件與派車紀錄（只存在這個瀏覽器）" @click="loadDemo">載入示範情境</button>
             <button
               v-if="source === 'local' && reports.length"
               class="text-xs"

@@ -1,6 +1,8 @@
 # 🗑️ 台北桶報局
 
 > 市政 debug松 #2「找回消失的垃圾桶」｜隊伍：同流 One Flow
+>
+> **線上試用：** 市民端 https://taipei-bin-bureau.vercel.app ・ 市府戰情 https://taipei-bin-bureau.vercel.app/#/admin ・ 3D 城市戰情室 https://taipei-bin-bureau.vercel.app/#/3d
 
 市民一鍵找到最近的垃圾桶、回報滿了或不見了；市府從同一份回報看見「垃圾桶沙漠」，並依填滿率安排清運。
 
@@ -125,14 +127,38 @@ npm run data:mock    # 重新產生模擬資料再建置
 
 ## 資料來源
 
+### 前台目前用到的資料：部分真實、部分模擬
+
+前台只讀 `apps/web/public/data/` 的靜態 JSON（由 `npm run data:build` 產生），各檔的真假如下：
+
+| 前台畫面 | 資料檔 | 來源 | 真實／模擬 |
+| --- | --- | --- | --- |
+| 地圖上 661 個垃圾桶的位置、行政區、地址 | `bins.json` | 環保局「行人專用清潔箱總表」開放資料，repo 內附 UTF-8 版 `data/open/121355-pedestrian-bins.csv`（2026-10 下載） | **真實** |
+| 景點商圈周邊熱點 | `hotspots.json` | 環保局「行人專用清潔箱總表（景點商圈周邊 130 點）」，repo 內附 `data/open/hotspot-bins-130.csv` | **真實** |
+| 頂欄「官方統計 806 組」 | `official_counts.json` | 環保局新聞稿（2026-08-10，2026 年 6 月數字） | **真實** |
+| 每個桶的填滿程度、幾天前有人確認（待清運數、超過 14 天未確認數） | `fill_levels.json` | `data/scripts/simulate_fill.py` 以固定亂數產生，代替尚不存在的感測與巡查紀錄 | **模擬** |
+| 缺口熱區、網格分數、候選新設點、各區缺口排名 | `grid.json` | 垃圾桶位置為真實資料，但人流需求點（捷運、公車、陳情、商圈）取自 `data/mock/demand_points.mock.csv` | **模擬**（需求端為模擬，算出的缺口僅供示意） |
+| 市民回報、派車、處理紀錄 | 瀏覽器 localStorage 或 API | Demo 時現場操作產生 | 現場產生，非政府資料 |
+
+`apps/web/public/data/meta.json` 也記錄了這件事：`bins.kind = real`、`demand.kind = mock`。
+
+換成真實資料的方法：
+
+- **缺口熱區**：把捷運進出量、公車站、陳情等開放資料各自轉成 `lat,lng,source,value` 格式，存成 `data/interim/demand_points.csv`，再執行 `npm run data:build`，缺口與候選新設點就會改用真實資料計算。
+- **填滿率與確認紀錄**：環保局目前沒有公開感測或巡查資料，需等試辦期間由市民回報累積，或由局處提供。
+- **垃圾桶點位更新**：下載新版 CSV，轉成 UTF-8 存成 `data/raw/bins.csv`（不進版控），執行 `npm run data:build` 即會優先採用。
+
+### 資料集清單
+
 | 資料 | 類型 |
 | --- | --- |
-| [臺北市行人專用清潔箱（121355）](https://data.gov.tw/dataset/121355) | 真實開放資料（點位，尚未取得最新版） |
+| [臺北市行人專用清潔箱（121355）](https://data.gov.tw/dataset/121355) | 真實開放資料（點位 661 筆，前台已使用） |
+| 行人專用清潔箱總表（景點商圈周邊 130 點） | 真實開放資料（熱點，前台已使用） |
 | [臺北市環境衛生管理概況（145763）](https://data.gov.tw/dataset/145763) | 真實開放資料（官方年度數量） |
 | `apps/web/public/data/official_counts.json` | 官方數量摘錄，引自 [臺北行人專用清潔箱數量整理](https://data.bin.ianwu.net/) |
-| [臺北捷運各站分時進出量](https://data.taipei/dataset/detail?id=63f31c7e-7fc3-418b-bd82-b95158755b4d) | 真實開放資料 |
-| [臺北市公車站牌位置圖](https://data.taipei/dataset/detail?id=48aa5bca-2a4f-4fb7-a658-43cba51d5d56) | 真實開放資料 |
-| [臺北市陳情系統類別資料](https://data.taipei/dataset/detail?id=cb423c17-88eb-4231-a725-f1b93247d1bf) | 真實開放資料 |
+| [臺北捷運各站分時進出量](https://data.taipei/dataset/detail?id=63f31c7e-7fc3-418b-bd82-b95158755b4d) | 真實開放資料（尚未接入，前台目前用模擬值） |
+| [臺北市公車站牌位置圖](https://data.taipei/dataset/detail?id=48aa5bca-2a4f-4fb7-a658-43cba51d5d56) | 真實開放資料（尚未接入，前台目前用模擬值） |
+| [臺北市陳情系統類別資料](https://data.taipei/dataset/detail?id=cb423c17-88eb-4231-a725-f1b93247d1bf) | 真實開放資料（尚未接入，前台目前用模擬值） |
 | 「市長你給我聽好了」資料集 | 真實（去識別化，僅限本活動，未收錄於本 repo） |
 | 垃圾桶填滿率 | **模擬資料**（`data/scripts/simulate_fill.py`） |
 | 市民回報 | **模擬／Demo 現場產生** |
