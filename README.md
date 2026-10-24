@@ -5,6 +5,8 @@
 > **線上試用：** 市民端 https://taipei-bin-bureau.vercel.app ・ 市府戰情 https://taipei-bin-bureau.vercel.app/#/admin ・ 3D 城市戰情室 https://taipei-bin-bureau.vercel.app/#/3d
 >
 > **介紹影片：** https://youtu.be/nh-yJZHnAwY （實際系統畫面版）・ 第一版情境短片 https://youtu.be/8s3M5DoNdEE
+>
+> **提案簡報：** [完整版簡報](https://docs.google.com/presentation/d/1GVKkFcZ6371ggOz-eM3BsdMe2X7vSOWB/edit?usp=drivesdk&ouid=108550581220620835383&rtpof=true&sd=true) ・ [簡報版影片](https://drive.google.com/file/d/1PrsIM4HNK8-aKNmr4eYqrXmt-Q69KCGb/view?usp=drivesdk)
 
 市民一鍵找到最近的垃圾桶、回報滿了或不見了；市府從同一份回報看見「垃圾桶沙漠」，並依填滿率安排清運。
 
