@@ -343,8 +343,27 @@ watch(collapsed, async () => {
   frame(true)
 })
 
+// 轉橫向、拉視窗、手機版面板切成桌機側欄時，Leaflet 不會自己重算尺寸，會留下灰邊
+let resizeObs: ResizeObserver | undefined
+let resizeRaf = 0
+let lastWidth = 0
+
 onMounted(async () => {
   map.value = createMap(mapEl.value!, { zoom: 16 })
+  lastWidth = mapEl.value!.clientWidth
+  resizeObs = new ResizeObserver(() => {
+    cancelAnimationFrame(resizeRaf)
+    resizeRaf = requestAnimationFrame(() => {
+      map.value?.invalidateSize({ pan: false })
+      // 只有寬度變了（轉向、拉視窗）才重新框景；手機網址列伸縮只改高度，不要打斷使用者拖曳
+      const w = mapEl.value?.clientWidth ?? 0
+      if (w !== lastWidth) {
+        lastWidth = w
+        frame()
+      }
+    })
+  })
+  resizeObs.observe(mapEl.value!)
   const [b, f, meta, g] = await Promise.all([loadBins(), loadFillLevels(), loadMeta(), loadGrid()])
   mock.value = isMock(meta)
   fills.value = new Map(f.map((x) => [x.id, x.fill]))
@@ -384,6 +403,8 @@ onBeforeUnmount(() => {
   stopDispatchListen?.()
   stopCasesListen?.()
   clearTimeout(toastTimer)
+  resizeObs?.disconnect()
+  cancelAnimationFrame(resizeRaf)
   map.value?.remove()
 })
 </script>
@@ -393,7 +414,7 @@ onBeforeUnmount(() => {
     <div ref="mapEl" class="absolute inset-0" />
 
     <!-- 頂部：品牌與工具 -->
-    <header class="pointer-events-none absolute inset-x-0 top-0 z-[1001] flex items-start justify-between gap-2 p-3 md:p-4">
+    <header class="pointer-events-none absolute inset-x-0 top-0 z-[1001] flex items-start justify-between gap-2 pr-[max(0.75rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 md:p-4">
       <div class="pointer-events-auto flex items-center gap-2">
         <div class="rounded-[10px] bg-sign p-[3px] shadow-lg shadow-ink/20">
           <div class="rounded-[7px] border-[1.5px] border-white/90 px-3 py-1.5 text-[15px] font-bold tracking-[0.08em] whitespace-nowrap text-white">台北桶報局</div>
@@ -414,7 +435,7 @@ onBeforeUnmount(() => {
         >{{ badge.name }}</span>
       </div>
       <div class="pointer-events-auto flex items-center gap-2">
-        <RouterLink to="/admin" class="rounded-full bg-white/90 px-3 py-2 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
+        <RouterLink to="/admin" class="inline-flex h-10 items-center rounded-full bg-white/90 px-3.5 text-xs font-bold whitespace-nowrap text-sign shadow-sm backdrop-blur hover:bg-white">市府戰情</RouterLink>
         <button
           class="grid h-10 w-10 place-items-center rounded-full bg-white text-sign shadow-md transition active:scale-95"
           :aria-label="locateState === 'locating' ? '定位中' : '重新定位'"
@@ -438,7 +459,7 @@ onBeforeUnmount(() => {
         <span class="h-1.5 w-10 rounded-full bg-hair" />
       </button>
 
-      <div class="overflow-y-auto px-4 pb-4 md:pt-4">
+      <div class="min-h-0 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pt-4 md:pb-4">
         <div
           v-if="scanValid === true && scannedId"
           class="mb-3 flex items-center gap-3 rounded-[12px] border-2 border-sign bg-sign-soft px-3 py-2.5 text-sign"
@@ -484,10 +505,10 @@ onBeforeUnmount(() => {
                 <p class="text-xs text-white/75">{{ isScanned(target.bin) ? '你正在這桶旁邊' : pickedId ? '你選的垃圾桶' : '最近的垃圾桶' }}</p>
                 <p class="truncate text-lg leading-snug font-bold">{{ target.bin.road }}</p>
                 <p v-if="target.meters < 15" class="mt-1 text-[28px] leading-tight font-bold">就在你旁邊</p>
-                <p v-else class="mt-0.5 flex items-baseline gap-1.5">
+                <p v-else class="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
                   <span class="num text-[44px] leading-none font-bold">{{ Math.round(target.meters) }}</span>
                   <span class="text-sm whitespace-nowrap">公尺</span>
-                  <span class="ml-1 text-sm text-white/85">步行 {{ walkingMinutes(target.meters) }} 分鐘，往{{ compassWord(bearing) }}</span>
+                  <span class="ml-1 text-sm whitespace-nowrap text-white/85">步行 {{ walkingMinutes(target.meters) }} 分鐘，往{{ compassWord(bearing) }}</span>
                 </p>
               </div>
             </div>
