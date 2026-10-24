@@ -22,3 +22,6 @@ __pycache__/
 # 本機工具產生的檔案（瀏覽器測試、AI 生圖），不進版控
 .playwright-mcp/
 output/
+
+# 會議逐字稿含隊友對話，只留本機不公開
+docs/meetings/*.srt
