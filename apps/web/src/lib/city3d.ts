@@ -109,6 +109,7 @@ export class City3D {
   private pings: { group: THREE.Group; born: number }[] = []
   private labelGroup = new THREE.Group()
   private pinGroup = new THREE.Group()
+  private walkGroup = new THREE.Group()
   private raycaster = new THREE.Raycaster()
   private pointer = new THREE.Vector2(9, 9)
   private frame = 0
@@ -163,11 +164,15 @@ export class City3D {
     this.water.rotation.x = -Math.PI / 2
     this.water.position.y = -1.4
     this.water.receiveShadow = true
-    this.scene.add(this.water, this.routeGroup, this.labelGroup, this.pinGroup)
+    this.scene.add(this.water, this.routeGroup, this.labelGroup, this.pinGroup, this.walkGroup)
     this.setNight(false)
 
     this.renderer.domElement.addEventListener('pointermove', this.onPointerMove)
-    this.renderer.domElement.addEventListener('pointerdown', (e) => (this.downAt = { x: e.clientX, y: e.clientY }))
+    this.renderer.domElement.addEventListener('pointerdown', (e) => {
+      this.downAt = { x: e.clientX, y: e.clientY }
+      // 手機點一下沒有 pointermove，按下時就要更新指標位置，放開時才點得到桶
+      this.onPointerMove(e)
+    })
     this.renderer.domElement.addEventListener('pointerup', (e) => {
       // 拖曳旋轉不算點擊
       if (!this.downAt || Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y) > 5) return
@@ -418,6 +423,39 @@ export class City3D {
     })
   }
 
+  /** 市民端：你的位置（藍點）、要去的垃圾桶（綠圈），中間一條步行線 */
+  setWalk(from: LatLng, to: LatLng) {
+    this.walkGroup.clear()
+    const a = this.project(from[0], from[1], 0.4)
+    const b = this.project(to[0], to[1], 0.4)
+    const you = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.8, 24), new THREE.MeshStandardMaterial({ color: '#2f6fed', emissive: '#2f6fed', emissiveIntensity: 0.4 }))
+    you.position.copy(a)
+    const ringGeo = new THREE.RingGeometry(1.6, 2.2, 40)
+    ringGeo.rotateX(-Math.PI / 2)
+    const youRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#2f6fed', transparent: true, opacity: 0.5, side: THREE.DoubleSide }))
+    const binRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#0b5d3b', transparent: true, opacity: 0.85, side: THREE.DoubleSide }))
+    youRing.position.copy(a).setY(0.1)
+    binRing.position.copy(b).setY(0.1)
+    youRing.userData.ring = binRing.userData.ring = true
+    this.walkGroup.add(you, youRing, binRing)
+    if (a.distanceTo(b) > 0.3) {
+      const line = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(a, b), 8, 0.22, 8), new THREE.MeshStandardMaterial({ color: '#0b5d3b', emissive: '#0b5d3b', emissiveIntensity: 0.4 }))
+      this.walkGroup.add(line)
+    }
+    const el = document.createElement('div')
+    el.textContent = '你在這裡'
+    Object.assign(el.style, { padding: '3px 10px', borderRadius: '9999px', background: '#2f6fed', color: '#fff', font: '700 12px sans-serif', boxShadow: '0 4px 12px rgb(0 0 0 / .25)' })
+    // 被房子擋住也要看得到，像導航的疊圖
+    this.walkGroup.traverse((o) => {
+      const mat = (o as THREE.Mesh).material as THREE.Material | undefined
+      if (mat) mat.depthTest = false
+      o.renderOrder = 10
+    })
+    const label = new CSS2DObject(el)
+    label.position.copy(a).setY(5)
+    this.walkGroup.add(label)
+  }
+
   /** 地面顏色：一般模式是土地色，缺口模式依缺口分數由黃到紅 */
   paintTiles(mode: 'plain' | 'gap', district?: (cellId: string) => boolean) {
     if (!this.tiles) return
@@ -656,12 +694,19 @@ export class City3D {
     this.insetLeft = px
     this.resize()
   }
+  /** 手機版面板在下方：畫面中心往上移 */
+  private insetBottom = 0
+  setInsetBottom(px: number) {
+    this.insetBottom = px
+    this.resize()
+  }
 
   private resize() {
     const { clientWidth: w, clientHeight: h } = this.el
     if (!w || !h) return
     this.camera.aspect = w / h
     if (this.insetLeft && w > 900) this.camera.setViewOffset(w, h, -this.insetLeft / 2, 0, w, h)
+    else if (this.insetBottom) this.camera.setViewOffset(w, h, 0, this.insetBottom / 2, w, h)
     else this.camera.clearViewOffset()
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
@@ -688,7 +733,7 @@ export class City3D {
     if (!this.controls.autoRotate && !this.flight && performance.now() - this.lastInteract > 20000 && !this.reduceMotion) this.controls.autoRotate = true
     this.controls.update()
     // 候選點的光圈呼吸
-    for (const c of this.pinGroup.children) if (c.userData.ring) c.scale.setScalar(1 + Math.sin(t * 2.4) * 0.12)
+    for (const c of [...this.pinGroup.children, ...this.walkGroup.children]) if (c.userData.ring) c.scale.setScalar(1 + Math.sin(t * 2.4) * 0.12)
 
     // 快滿的桶：警示標記上下浮動
     if (this.dueMarkers && this.dueIdx.length) {
