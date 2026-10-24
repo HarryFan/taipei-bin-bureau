@@ -274,12 +274,19 @@ onBeforeUnmount(() => {
         <button
           v-for="d in ['', ...DISTRICTS]"
           :key="d || 'all'"
-          class="rounded-full border px-2.5 py-0.5 text-xs transition disabled:opacity-35"
-          :class="district === d ? 'border-ink bg-ink font-bold text-white' : 'border-hair hover:bg-paper'"
+          class="rounded-full border px-2.5 py-0.5 text-xs transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sign"
+          :class="
+            district === d
+              ? 'border-truck bg-truck font-bold text-ink'
+              : d && !binCount.get(d)
+                ? 'cursor-not-allowed border-dashed border-mute/50 bg-transparent text-mute'
+                : 'border-sign-soft bg-sign-soft font-medium text-sign-deep hover:border-sign/40 hover:bg-[#c6dccf]'
+          "
           :disabled="!!d && !binCount.get(d)"
+          :title="d && !binCount.get(d) ? '開放資料沒有這一區的點位' : ''"
           @click="district = d"
         >
-          {{ d || '全市' }}<span v-if="d && dueByDistrict.get(d)" class="num ml-1 text-alert" :class="district === d ? 'text-[#ffb3b5]' : ''">{{ dueByDistrict.get(d) }}</span>
+          {{ d || '全市' }}<span v-if="d && dueByDistrict.get(d)" class="num ml-1 font-bold text-alert-ink">{{ dueByDistrict.get(d) }}</span>
         </button>
       </div>
 
@@ -458,30 +465,37 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 5px 12px;
   border-radius: 9999px;
-  background: rgb(255 255 255 / 0.92);
-  color: #10251c;
+  border: 1.5px solid rgb(255 255 255 / 0.85);
+  background: var(--color-sign);
+  color: #fff;
   font-size: 13px;
   font-weight: 700;
-  box-shadow: 0 6px 18px rgb(16 37 28 / 0.18);
+  box-shadow: 0 6px 16px rgb(7 66 41 / 0.32);
   cursor: pointer;
   white-space: nowrap;
   transition: transform 0.15s;
 }
 .city3d-label:hover {
   transform: translateY(-2px);
+  background: var(--color-sign-deep);
+}
+.city3d-label:focus-visible {
+  outline: 2px solid var(--color-truck);
+  outline-offset: 2px;
 }
 .city3d-label b {
   min-width: 20px;
   padding: 0 6px;
   border-radius: 9999px;
-  background: #e5484d;
+  background: var(--color-alert-ink);
   color: #fff;
   font: 600 12px/18px var(--font-num);
   text-align: center;
 }
 .city3d-label.is-active {
-  background: #10251c;
-  color: #fff;
+  border-color: #fff;
+  background: var(--color-truck);
+  color: var(--color-ink);
 }
 .city3d-pin {
   display: grid;
@@ -497,7 +511,6 @@ onBeforeUnmount(() => {
     0 6px 16px rgb(0 0 0 / 0.25);
 }
 .city3d-night .city3d-label:not(.is-active) {
-  background: rgb(20 36 48 / 0.9);
-  color: #e6efe9;
+  border-color: rgb(255 255 255 / 0.4);
 }
 </style>
